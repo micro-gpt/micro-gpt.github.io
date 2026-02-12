@@ -1,6 +1,7 @@
 /**
  * JS port of microGPT forward pass — inference only, no autograd.
  * Uses plain number arrays. Returns logits + attention weights.
+ * With { intermediates: true }, captures all intermediate values at each stage.
  */
 
 const N_EMBD = 16;
@@ -9,8 +10,6 @@ const N_LAYER = 1;
 const BLOCK_SIZE = 8;
 const HEAD_DIM = N_EMBD / N_HEAD;
 
-// Weight matrices extracted from flat array
-let weights = null;
 let stateDict = null;
 
 function extractMatrix(flat, offset, rows, cols) {
@@ -22,11 +21,9 @@ function extractMatrix(flat, offset, rows, cols) {
 }
 
 export function loadWeights(flatWeights, vocabSize) {
-  weights = flatWeights;
   let offset = 0;
   const sd = {};
 
-  // Must match weight_order in export_data.py
   const shapes = [
     ['wte', vocabSize, N_EMBD],
     ['wpe', BLOCK_SIZE, N_EMBD],
@@ -46,6 +43,10 @@ export function loadWeights(flatWeights, vocabSize) {
   }
 
   stateDict = sd;
+}
+
+export function getStateDict() {
+  return stateDict;
 }
 
 function linear(x, w) {
@@ -83,31 +84,50 @@ function rmsnorm(x) {
 }
 
 /**
- * Forward pass. Returns { logits, attentionWeights }.
- * attentionWeights[head] = Float64Array of attention weights for this step.
- * keys/values are KV caches — pass in [] for each layer to start fresh.
+ * Forward pass. Returns { logits, attentionWeights, intermediates? }.
+ * When opts.intermediates is true, returns all intermediate values at each stage.
  */
-export function gptForward(tokenId, posId, keys, values) {
+export function gptForward(tokenId, posId, keys, values, opts) {
   const sd = stateDict;
+  const capture = opts && opts.intermediates;
+  const inter = capture ? {} : null;
 
   // Embeddings
-  const tokEmb = sd.wte[tokenId];
-  const posEmb = sd.wpe[posId];
+  const tokEmb = Array.from(sd.wte[tokenId]);
+  const posEmb = Array.from(sd.wpe[posId]);
   let x = tokEmb.map((t, i) => t + posEmb[i]);
+
+  if (capture) {
+    inter.tokEmb = tokEmb;
+    inter.posEmb = posEmb;
+    inter.combined = Array.from(x);
+  }
+
   x = rmsnorm(x);
+  if (capture) inter.postNorm0 = Array.from(x);
 
   const allAttnWeights = [];
+  const allAttnLogits = [];
 
   for (let li = 0; li < N_LAYER; li++) {
     const xResidual1 = x;
     x = rmsnorm(x);
+    if (capture) inter.postNorm1 = Array.from(x);
+
     const q = linear(x, sd[`layer${li}.attn_wq`]);
     const k = linear(x, sd[`layer${li}.attn_wk`]);
     const v = linear(x, sd[`layer${li}.attn_wv`]);
     keys[li].push(k);
     values[li].push(v);
 
+    if (capture) {
+      inter.q = Array.from(q);
+      inter.k = Array.from(k);
+      inter.v = Array.from(v);
+    }
+
     const xAttn = [];
+    const headAttnLogits = [];
     for (let h = 0; h < N_HEAD; h++) {
       const hs = h * HEAD_DIM;
       const qH = q.slice(hs, hs + HEAD_DIM);
@@ -120,6 +140,7 @@ export function gptForward(tokenId, posId, keys, values) {
         return dot / Math.sqrt(HEAD_DIM);
       });
 
+      headAttnLogits.push(Array.from(attnLogits));
       const attnWeights = softmax(attnLogits);
       allAttnWeights.push(Array.from(attnWeights));
 
@@ -130,20 +151,41 @@ export function gptForward(tokenId, posId, keys, values) {
       }
     }
 
+    if (capture) inter.attnLogits = headAttnLogits;
+    allAttnLogits.push(headAttnLogits);
+
     x = linear(xAttn, sd[`layer${li}.attn_wo`]);
+    if (capture) inter.attnOut = Array.from(x);
+
     x = x.map((a, i) => a + xResidual1[i]);
+    if (capture) inter.postResidual1 = Array.from(x);
 
     // MLP
     const xResidual2 = x;
     x = rmsnorm(x);
-    x = linear(x, sd[`layer${li}.mlp_fc1`]);
-    x = x.map(xi => { const r = Math.max(0, xi); return r * r; }); // ReLU²
-    x = linear(x, sd[`layer${li}.mlp_fc2`]);
+    if (capture) inter.postNorm2 = Array.from(x);
+
+    const mlpHidden = linear(x, sd[`layer${li}.mlp_fc1`]);
+    if (capture) inter.mlpHidden = Array.from(mlpHidden);
+
+    const mlpActivated = mlpHidden.map(xi => { const r = Math.max(0, xi); return r * r; });
+    if (capture) inter.mlpActivated = Array.from(mlpActivated);
+
+    x = linear(mlpActivated, sd[`layer${li}.mlp_fc2`]);
+    if (capture) inter.mlpOut = Array.from(x);
+
     x = x.map((a, i) => a + xResidual2[i]);
+    if (capture) inter.postResidual2 = Array.from(x);
   }
 
   const logits = linear(x, sd.lm_head);
-  return { logits, attentionWeights: allAttnWeights };
+
+  const result = { logits, attentionWeights: allAttnWeights };
+  if (capture) {
+    inter.logits = Array.from(logits);
+    result.intermediates = inter;
+  }
+  return result;
 }
 
 /**

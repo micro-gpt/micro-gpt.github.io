@@ -35,7 +35,10 @@ async function initSection(name) {
     }
     case 'training': {
       const { initTraining } = await import('./training.js');
-      initTraining(d);
+      initTraining(d, () => {
+        // Weights updated from training — reset architecture section for fresh data
+        initialized.architecture = false;
+      });
       break;
     }
     case 'inference': {

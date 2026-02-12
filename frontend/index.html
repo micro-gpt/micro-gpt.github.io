@@ -247,6 +247,45 @@
       box-shadow: none;
     }
 
+    .btn-sm {
+      padding: 0.375rem 0.75rem;
+      min-height: 36px;
+      font-size: 0.8rem;
+    }
+
+    /* Toggle group */
+    .toggle-group {
+      display: inline-flex;
+      background: var(--bg-tertiary);
+      border-radius: var(--radius-md);
+      padding: 2px;
+      gap: 2px;
+    }
+
+    .toggle-group button {
+      padding: 0.375rem 0.75rem;
+      min-height: 36px;
+      background: none;
+      border: none;
+      border-radius: calc(var(--radius-md) - 2px);
+      color: var(--text-muted);
+      font-family: var(--font-sans);
+      font-size: 0.8rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all var(--transition-fast);
+    }
+
+    .toggle-group button:hover {
+      color: var(--text-secondary);
+    }
+
+    .toggle-group button[aria-pressed="true"] {
+      background: var(--accent-blue);
+      color: white;
+      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
+    }
+
     /* Range Slider */
     input[type="range"] {
       -webkit-appearance: none;
@@ -281,6 +320,24 @@
       transform: scale(1.15);
     }
 
+    /* Select */
+    select {
+      padding: 0.5rem 2rem 0.5rem 0.75rem;
+      min-height: 36px;
+      background: var(--bg-tertiary);
+      color: var(--text-primary);
+      border: 1px solid var(--glass-border);
+      border-radius: var(--radius-md);
+      font-family: var(--font-mono);
+      font-size: 0.85rem;
+      cursor: pointer;
+      -webkit-appearance: none;
+      appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%2394a3b8' fill='none' stroke-width='1.5'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 0.75rem center;
+    }
+
     /* Code Panel */
     .code-panel {
       background: rgba(0, 0, 0, 0.3);
@@ -291,8 +348,33 @@
       line-height: 1.6;
       color: var(--text-secondary);
       overflow-x: auto;
-      white-space: pre;
       border: 1px solid var(--glass-border);
+      max-height: 500px;
+      overflow-y: auto;
+    }
+
+    .code-panel .line {
+      display: flex;
+      gap: 1rem;
+      padding: 0 0.5rem;
+      border-radius: 2px;
+    }
+
+    .code-panel .line.highlighted {
+      background: rgba(59, 130, 246, 0.15);
+      border-left: 2px solid var(--accent-blue);
+    }
+
+    .code-panel .line-num {
+      color: var(--text-dim);
+      user-select: none;
+      min-width: 2.5em;
+      text-align: right;
+      flex-shrink: 0;
+    }
+
+    .code-panel .line-content {
+      white-space: pre;
     }
 
     .code-panel .keyword { color: var(--accent-purple-light); }
@@ -300,6 +382,7 @@
     .code-panel .string { color: var(--accent-green); }
     .code-panel .comment { color: var(--text-dim); }
     .code-panel .number { color: var(--accent-orange); }
+    .code-panel .decorator { color: var(--accent-cyan); }
 
     /* SVG shared */
     .viz-container {
@@ -330,11 +413,84 @@
       stroke-width: 2;
     }
 
+    .arch-block.active rect {
+      stroke-width: 3;
+    }
+
     /* Dimension labels */
     .dim-label {
       font-family: var(--font-mono);
       font-size: 11px;
       fill: var(--text-dim);
+    }
+
+    /* Vector display (bar chart of intermediate values) */
+    .vector-display {
+      display: flex;
+      align-items: flex-end;
+      gap: 1px;
+      height: 48px;
+      padding: 4px 0;
+    }
+
+    .vector-display .vec-bar {
+      flex: 1;
+      min-width: 2px;
+      border-radius: 1px 1px 0 0;
+      transition: height var(--transition-fast);
+    }
+
+    .vector-label {
+      font-family: var(--font-mono);
+      font-size: 0.7rem;
+      color: var(--text-dim);
+      margin-bottom: 0.25rem;
+    }
+
+    /* Data viewer panel */
+    .data-viewer {
+      background: rgba(0, 0, 0, 0.2);
+      border: 1px solid var(--glass-border);
+      border-radius: var(--radius-md);
+      padding: 0.75rem;
+    }
+
+    .data-viewer h4 {
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: var(--text-secondary);
+      margin-bottom: 0.5rem;
+    }
+
+    .data-viewer .values-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(52px, 1fr));
+      gap: 2px;
+      font-family: var(--font-mono);
+      font-size: 0.65rem;
+      color: var(--text-muted);
+    }
+
+    .data-viewer .val-cell {
+      text-align: center;
+      padding: 2px 1px;
+      border-radius: 2px;
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* Input selector row */
+    .input-selector {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      flex-wrap: wrap;
+    }
+
+    .input-selector label {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
     }
 
     /* Training section */
@@ -358,6 +514,38 @@
       color: var(--accent-blue-light);
       min-width: 60px;
       text-align: right;
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* Training progress */
+    .train-progress {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      margin-top: 1rem;
+    }
+
+    .progress-bar-track {
+      flex: 1;
+      height: 6px;
+      background: var(--bg-tertiary);
+      border-radius: 3px;
+      overflow: hidden;
+    }
+
+    .progress-bar-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--accent-blue), var(--accent-purple));
+      border-radius: 3px;
+      transition: width 0.1s linear;
+      width: 0%;
+    }
+
+    .progress-text {
+      font-family: var(--font-mono);
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      white-space: nowrap;
       font-variant-numeric: tabular-nums;
     }
 
@@ -394,6 +582,41 @@
       font-size: 0.85rem;
       color: var(--text-secondary);
       line-height: 1.6;
+    }
+
+    /* Weight inspector */
+    .weight-heatmap-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+      gap: 1rem;
+    }
+
+    .weight-heatmap {
+      text-align: center;
+    }
+
+    .weight-heatmap .heatmap-label {
+      font-size: 0.75rem;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      margin-bottom: 0.375rem;
+    }
+
+    .weight-heatmap canvas {
+      width: 100%;
+      max-width: 260px;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--glass-border);
+      image-rendering: pixelated;
+      cursor: pointer;
+    }
+
+    .weight-heatmap .dims {
+      font-family: var(--font-mono);
+      font-size: 0.7rem;
+      color: var(--text-dim);
+      margin-top: 0.25rem;
     }
 
     /* Inference section */
@@ -443,7 +666,46 @@
       50% { opacity: 0; }
     }
 
+    /* Token history */
+    .token-history {
+      display: flex;
+      gap: 2px;
+      align-items: center;
+      flex-wrap: wrap;
+      margin-bottom: 0.75rem;
+    }
+
+    .token-chip {
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      padding: 2px 6px;
+      border-radius: var(--radius-sm);
+      background: var(--bg-tertiary);
+      color: var(--text-secondary);
+      border: 1px solid var(--glass-border);
+    }
+
+    .token-chip.current {
+      background: rgba(59, 130, 246, 0.2);
+      border-color: var(--accent-blue);
+      color: var(--accent-blue-light);
+    }
+
     /* Probability bars */
+    .prob-section {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+    }
+
+    .prob-column h4 {
+      font-size: 0.75rem;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      margin-bottom: 0.5rem;
+    }
+
     .prob-bars {
       display: flex;
       flex-direction: column;
@@ -484,11 +746,15 @@
       background: linear-gradient(90deg, var(--accent-blue), var(--accent-purple));
     }
 
+    .prob-bar-row .bar-fill.logit-bar {
+      background: var(--accent-orange);
+    }
+
     .prob-bar-row .prob-value {
       font-family: var(--font-mono);
       font-size: 0.7rem;
       color: var(--text-dim);
-      width: 3rem;
+      width: 3.5rem;
       text-align: right;
     }
 
@@ -519,6 +785,34 @@
       image-rendering: pixelated;
     }
 
+    /* Collapsible panel */
+    .collapsible-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      cursor: pointer;
+      padding: 0.5rem 0;
+      min-height: 44px;
+    }
+
+    .collapsible-header .chevron {
+      transition: transform var(--transition-fast);
+      color: var(--text-dim);
+      font-size: 0.8rem;
+    }
+
+    .collapsible-header[aria-expanded="true"] .chevron {
+      transform: rotate(180deg);
+    }
+
+    .collapsible-content {
+      display: none;
+    }
+
+    .collapsible-content.open {
+      display: block;
+    }
+
     /* Loading skeleton */
     .skeleton {
       background: linear-gradient(90deg,
@@ -536,6 +830,21 @@
       100% { background-position: -200% 0; }
     }
 
+    /* Loading spinner */
+    .spinner {
+      display: inline-block;
+      width: 16px;
+      height: 16px;
+      border: 2px solid var(--bg-quaternary);
+      border-top-color: var(--accent-blue);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
     /* Responsive */
     @media (max-width: 640px) {
       .app { padding: 1.5rem 1rem 3rem; }
@@ -543,6 +852,9 @@
       .heatmap-grid { grid-template-columns: repeat(2, 1fr); }
       .checkpoint-grid { grid-template-columns: 1fr; }
       .controls-row { flex-direction: column; }
+      .prob-section { grid-template-columns: 1fr; }
+      .weight-heatmap-grid { grid-template-columns: 1fr; }
+      .input-selector { flex-direction: column; align-items: flex-start; }
     }
 
     /* Reduced motion */
@@ -577,29 +889,66 @@
       <button class="tab-btn" role="tab" id="tab-inference" aria-controls="panel-inference" aria-selected="false">Inference</button>
     </nav>
 
+    <!-- ===== ARCHITECTURE ===== -->
     <section class="tab-panel" role="tabpanel" id="panel-architecture" aria-labelledby="tab-architecture" aria-hidden="false">
       <div class="card">
         <h2>Forward Pass</h2>
-        <div style="display:flex;justify-content:center;margin-bottom:1rem">
-          <button class="btn" id="btn-animate">Run Forward Pass</button>
+        <div class="input-selector" id="arch-input-selector">
+          <label for="arch-token-select">Token</label>
+          <select id="arch-token-select" aria-label="Input token"></select>
+          <label for="arch-pos-select">Position</label>
+          <select id="arch-pos-select" aria-label="Position index">
+            <option value="0">0</option>
+            <option value="1">1</option>
+            <option value="2">2</option>
+            <option value="3">3</option>
+            <option value="4">4</option>
+            <option value="5">5</option>
+            <option value="6">6</option>
+            <option value="7">7</option>
+          </select>
+          <button class="btn btn-sm" id="btn-run-forward">Run Forward Pass</button>
         </div>
+      </div>
+      <div class="card">
         <div class="viz-container" id="arch-svg-container">
           <div class="skeleton" style="height:600px"></div>
         </div>
       </div>
-      <div class="card" id="code-card" style="display:none">
-        <h3 id="code-title">Source Code</h3>
-        <div class="code-panel" id="code-content" role="region" aria-label="Python source code"></div>
+      <div class="card" id="arch-data-card" style="display:none">
+        <h3 id="arch-data-title">Intermediate Values</h3>
+        <div id="arch-data-content"></div>
+      </div>
+      <div class="card">
+        <div class="collapsible-header" id="source-toggle" role="button" tabindex="0" aria-expanded="false" aria-controls="source-panel-content">
+          <h3>Source Code — microgpt.py</h3>
+          <span class="chevron" aria-hidden="true">&#9660;</span>
+        </div>
+        <div class="collapsible-content" id="source-panel-content">
+          <div class="code-panel" id="source-code-panel" role="region" aria-label="Python source code"></div>
+        </div>
       </div>
     </section>
 
+    <!-- ===== TRAINING ===== -->
     <section class="tab-panel" role="tabpanel" id="panel-training" aria-labelledby="tab-training" aria-hidden="true">
       <div class="card">
         <h2>Training Progress</h2>
+        <div id="train-mode-controls" style="display:flex;align-items:center;gap:1rem;margin-bottom:1rem;flex-wrap:wrap">
+          <div class="toggle-group" role="group" aria-label="Training mode">
+            <button id="btn-pretrained" aria-pressed="true">Pre-trained</button>
+            <button id="btn-train-scratch" aria-pressed="false">Train from Scratch</button>
+          </div>
+          <div id="train-status" style="display:none" class="train-progress">
+            <span class="spinner"></span>
+            <span class="progress-text" id="train-progress-text">0 / 500</span>
+            <div class="progress-bar-track"><div class="progress-bar-fill" id="train-progress-bar"></div></div>
+          </div>
+        </div>
         <div class="viz-container" id="training-svg-container">
           <div class="skeleton" style="height:300px"></div>
         </div>
-        <div class="slider-row" style="margin-top:1rem">
+        <div class="slider-row" id="step-slider-row" style="margin-top:1rem">
           <label for="step-slider">Step</label>
           <input type="range" id="step-slider" min="0" max="499" value="499" aria-label="Training step">
           <span class="value" id="step-value">500</span>
@@ -611,8 +960,15 @@
           <div class="skeleton" style="height:120px"></div>
         </div>
       </div>
+      <div class="card">
+        <h3>Weight Inspector</h3>
+        <div class="weight-heatmap-grid" id="weight-inspector">
+          <div class="skeleton" style="height:200px"></div>
+        </div>
+      </div>
     </section>
 
+    <!-- ===== INFERENCE ===== -->
     <section class="tab-panel" role="tabpanel" id="panel-inference" aria-labelledby="tab-inference" aria-hidden="true">
       <div class="card">
         <h2>Name Generator</h2>
@@ -620,20 +976,28 @@
           <div class="control-group">
             <label for="temp-slider">Temperature</label>
             <div class="slider-row" style="margin-bottom:0">
-              <input type="range" id="temp-slider" min="1" max="10" value="5" aria-label="Temperature">
+              <input type="range" id="temp-slider" min="1" max="20" value="5" aria-label="Temperature">
               <span class="value" id="temp-value">0.5</span>
             </div>
           </div>
           <button class="btn" id="btn-generate">Generate</button>
         </div>
+        <div id="token-history" class="token-history" aria-label="Token sequence"></div>
         <div class="generated-name" id="generated-output" aria-live="polite">
           <span class="cursor"></span>
         </div>
       </div>
       <div class="card">
         <h3>Token Probabilities</h3>
-        <div class="prob-bars" id="prob-bars-container" aria-label="Token probability distribution">
-          <div class="skeleton" style="height:400px"></div>
+        <div class="prob-section" id="prob-section">
+          <div class="prob-column">
+            <h4>Logits (raw)</h4>
+            <div class="prob-bars" id="logit-bars-container" aria-label="Raw logit scores"></div>
+          </div>
+          <div class="prob-column">
+            <h4 id="prob-column-title">Probabilities (T=0.5)</h4>
+            <div class="prob-bars" id="prob-bars-container" aria-label="Token probability distribution"></div>
+          </div>
         </div>
       </div>
       <div class="card">
@@ -644,6 +1008,13 @@
           <div class="heatmap-head"><div class="head-label">Head 3</div><canvas width="8" height="8"></canvas></div>
           <div class="heatmap-head"><div class="head-label">Head 4</div><canvas width="8" height="8"></canvas></div>
         </div>
+      </div>
+      <div class="card">
+        <div class="collapsible-header" id="infer-inter-toggle" role="button" tabindex="0" aria-expanded="false" aria-controls="infer-inter-content">
+          <h3>Intermediate Values</h3>
+          <span class="chevron" aria-hidden="true">&#9660;</span>
+        </div>
+        <div class="collapsible-content" id="infer-inter-content"></div>
       </div>
     </section>
   </div>

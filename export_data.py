@@ -231,8 +231,13 @@ with open(os.path.join(out_dir, 'checkpoints.json'), 'w') as f:
 with open(os.path.join(out_dir, 'vocab.json'), 'w') as f:
     json.dump({'chars': uchars, 'bos': BOS}, f)
 
+# Training docs: shuffled document list for in-browser training
+with open(os.path.join(out_dir, 'training-docs.json'), 'w') as f:
+    json.dump(docs, f)
+
 print(f"\nExported to {out_dir}/")
 print(f"  weights.json: {len(weights)} values")
 print(f"  training-log.json: {len(training_log)} steps")
 print(f"  checkpoints.json: {len(checkpoints)} checkpoints")
 print(f"  vocab.json: {len(uchars)} chars + BOS={BOS}")
+print(f"  training-docs.json: {len(docs)} documents")
