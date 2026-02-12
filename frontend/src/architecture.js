@@ -248,26 +248,138 @@ for sample_idx in range(20):
         sample.append(uchars[token_id])
     print(f"sample {sample_idx+1:2d}: {''.join(sample)}")`;
 
-// Syntax highlighting for Python
+// Single-pass Python syntax highlighter (tokenizer approach avoids nested span bugs)
+const PY_KEYWORDS = new Set(['def', 'class', 'return', 'for', 'in', 'if', 'not', 'else', 'import', 'from', 'lambda', 'and', 'or', 'is', 'as', 'with', 'while', 'break', 'elif']);
+const PY_BUILTINS = new Set(['print', 'len', 'range', 'max', 'min', 'sum', 'set', 'sorted', 'zip', 'enumerate', 'open', 'float', 'int', 'isinstance']);
+
+function escHtml(s) {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function highlightLine(line) {
+  const out = [];
+  let i = 0;
+
+  while (i < line.length) {
+    // Comment — consumes rest of line
+    if (line[i] === '#') {
+      out.push(`<span class="comment">${escHtml(line.slice(i))}</span>`);
+      break;
+    }
+
+    // Triple-quoted string
+    if (line.slice(i, i + 3) === '"""' || line.slice(i, i + 3) === "'''") {
+      const q3 = line.slice(i, i + 3);
+      let end = line.indexOf(q3, i + 3);
+      if (end === -1) {
+        out.push(`<span class="string">${escHtml(line.slice(i))}</span>`);
+        break;
+      }
+      out.push(`<span class="string">${escHtml(line.slice(i, end + 3))}</span>`);
+      i = end + 3;
+      continue;
+    }
+
+    // f-string prefix
+    if (line[i] === 'f' && i + 1 < line.length && (line[i + 1] === '"' || line[i + 1] === "'")) {
+      const quote = line[i + 1];
+      let j = i + 2;
+      while (j < line.length && line[j] !== quote) {
+        if (line[j] === '\\') j++;
+        j++;
+      }
+      out.push(`<span class="string">${escHtml(line.slice(i, j + 1))}</span>`);
+      i = j + 1;
+      continue;
+    }
+
+    // Single/double-quoted string
+    if (line[i] === '"' || line[i] === "'") {
+      const quote = line[i];
+      let j = i + 1;
+      while (j < line.length && line[j] !== quote) {
+        if (line[j] === '\\') j++;
+        j++;
+      }
+      out.push(`<span class="string">${escHtml(line.slice(i, j + 1))}</span>`);
+      i = j + 1;
+      continue;
+    }
+
+    // Word (keyword, builtin, or plain identifier)
+    if (/[a-zA-Z_]/.test(line[i])) {
+      let j = i;
+      while (j < line.length && /[a-zA-Z0-9_]/.test(line[j])) j++;
+      const word = line.slice(i, j);
+      if (PY_KEYWORDS.has(word)) {
+        out.push(`<span class="keyword">${word}</span>`);
+      } else if (PY_BUILTINS.has(word)) {
+        out.push(`<span class="function">${word}</span>`);
+      } else {
+        out.push(escHtml(word));
+      }
+      i = j;
+      continue;
+    }
+
+    // Number (digits, decimals, scientific notation)
+    if (/[0-9]/.test(line[i])) {
+      let j = i;
+      while (j < line.length && /[0-9.eE]/.test(line[j])) j++;
+      // Include sign after e/E
+      if (j > i && /[eE]/.test(line[j - 1]) && j < line.length && /[+-]/.test(line[j])) j++;
+      while (j < line.length && /[0-9]/.test(line[j])) j++;
+      out.push(`<span class="number">${escHtml(line.slice(i, j))}</span>`);
+      i = j;
+      continue;
+    }
+
+    // Any other character
+    out.push(escHtml(line[i]));
+    i++;
+  }
+
+  return out.join('');
+}
+
 function highlightPython(code) {
   const lines = code.split('\n');
-  return lines.map((line, i) => {
-    let content = line
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;');
+  // Track multi-line triple-quoted strings
+  let inTriple = false;
+  let tripleQuote = '';
 
-    // Comments
-    content = content.replace(/(#.*)$/gm, '<span class="comment">$1</span>');
-    // Strings (triple-quoted handled by line-level, single/double quoted)
-    content = content.replace(/(&quot;|&#x27;|"|')((?:(?!\1).)*?)\1/g, '<span class="string">$1$2$1</span>');
-    content = content.replace(/(f)(&#x27;|"|')/g, '<span class="string">$1$2');
-    // Keywords
-    content = content.replace(/\b(def|class|return|for|in|if|not|else|import|from|lambda|and|or|is|as|with|while|break|elif)\b/g, '<span class="keyword">$1</span>');
-    // Numbers
-    content = content.replace(/\b(\d+\.?\d*(?:e[+-]?\d+)?)\b/g, '<span class="number">$1</span>');
-    // Built-in functions
-    content = content.replace(/\b(print|len|range|max|min|sum|set|sorted|zip|enumerate|open|float|int|isinstance)\b/g, '<span class="function">$1</span>');
+  return lines.map((line, i) => {
+    let content;
+
+    if (inTriple) {
+      const end = line.indexOf(tripleQuote);
+      if (end === -1) {
+        content = `<span class="string">${escHtml(line)}</span>`;
+      } else {
+        content = `<span class="string">${escHtml(line.slice(0, end + 3))}</span>${highlightLine(line.slice(end + 3))}`;
+        inTriple = false;
+      }
+    } else {
+      // Check if this line starts a multi-line triple-quoted string
+      const dq = line.indexOf('"""');
+      const sq = line.indexOf("'''");
+      let tqPos = -1;
+      if (dq >= 0 && (sq < 0 || dq <= sq)) { tqPos = dq; tripleQuote = '"""'; }
+      else if (sq >= 0) { tqPos = sq; tripleQuote = "'''"; }
+
+      if (tqPos >= 0) {
+        const closePos = line.indexOf(tripleQuote, tqPos + 3);
+        if (closePos === -1) {
+          // Opens but doesn't close on this line
+          content = highlightLine(line.slice(0, tqPos)) + `<span class="string">${escHtml(line.slice(tqPos))}</span>`;
+          inTriple = true;
+        } else {
+          content = highlightLine(line);
+        }
+      } else {
+        content = highlightLine(line);
+      }
+    }
 
     return { num: i + 1, content };
   });
