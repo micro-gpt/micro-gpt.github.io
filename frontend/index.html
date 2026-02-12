@@ -1,0 +1,653 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#0f172a">
+  <meta name="description" content="Interactive visualization of microGPT — a 199-line, dependency-free GPT implementation">
+  <title>microGPT — Interactive Visualization</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧠</text></svg>">
+  <style>
+    :root {
+      --bg-primary: #0f172a;
+      --bg-secondary: #1e293b;
+      --bg-tertiary: #334155;
+      --bg-quaternary: #475569;
+      --text-primary: #f1f5f9;
+      --text-secondary: #cbd5e1;
+      --text-muted: #94a3b8;
+      --text-dim: #64748b;
+      --accent-blue: #3b82f6;
+      --accent-blue-light: #60a5fa;
+      --accent-purple: #8b5cf6;
+      --accent-purple-light: #a78bfa;
+      --accent-green: #22c55e;
+      --accent-green-light: #86efac;
+      --accent-cyan: #06b6d4;
+      --accent-orange: #f97316;
+      --accent-red: #ef4444;
+      --glass-bg: rgba(30, 41, 59, 0.8);
+      --glass-border: rgba(255, 255, 255, 0.08);
+      --glass-border-hover: rgba(255, 255, 255, 0.12);
+      --radius-sm: 4px;
+      --radius-md: 8px;
+      --radius-lg: 12px;
+      --radius-xl: 16px;
+      --shadow-card: 0 4px 20px rgba(0, 0, 0, 0.2);
+      --shadow-glow-blue: 0 0 20px rgba(59, 130, 246, 0.3);
+      --shadow-glow-purple: 0 0 20px rgba(139, 92, 246, 0.3);
+      --shadow-deep: 0 12px 40px rgba(0, 0, 0, 0.3);
+      --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      --font-mono: 'Fira Code', 'Monaco', 'Cascadia Code', 'Consolas', monospace;
+      --ease-out: cubic-bezier(0.4, 0, 0.2, 1);
+      --transition-fast: 0.15s var(--ease-out);
+      --transition-normal: 0.3s var(--ease-out);
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: var(--font-sans);
+      background-color: var(--bg-primary);
+      background-image:
+        radial-gradient(at 20% 30%, rgba(59, 130, 246, 0.08) 0px, transparent 50%),
+        radial-gradient(at 80% 20%, rgba(139, 92, 246, 0.06) 0px, transparent 50%),
+        radial-gradient(at 40% 80%, rgba(6, 182, 212, 0.04) 0px, transparent 50%);
+      color: var(--text-primary);
+      line-height: 1.5;
+      min-height: 100dvh;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    ::-webkit-scrollbar { width: 8px; height: 8px; }
+    ::-webkit-scrollbar-track { background: var(--bg-secondary); border-radius: var(--radius-sm); }
+    ::-webkit-scrollbar-thumb { background: var(--bg-quaternary); border-radius: var(--radius-sm); }
+    ::-webkit-scrollbar-thumb:hover { background: var(--text-dim); }
+
+    *:focus-visible {
+      outline: 2px solid var(--accent-blue);
+      outline-offset: 2px;
+    }
+
+    .app {
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 2rem 1.5rem 4rem;
+    }
+
+    /* Header */
+    .header {
+      text-align: center;
+      margin-bottom: 2.5rem;
+    }
+
+    .header h1 {
+      font-size: 2rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      background: linear-gradient(135deg, var(--accent-blue), var(--accent-purple));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      margin-bottom: 0.5rem;
+    }
+
+    .header p {
+      color: var(--text-muted);
+      font-size: 0.95rem;
+    }
+
+    .header .stats {
+      display: flex;
+      gap: 1.5rem;
+      justify-content: center;
+      margin-top: 1rem;
+      flex-wrap: wrap;
+    }
+
+    .header .stat {
+      font-size: 0.8rem;
+      color: var(--text-dim);
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+
+    .header .stat strong {
+      color: var(--text-secondary);
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* Tab Navigation */
+    .tab-nav {
+      display: flex;
+      gap: 0.25rem;
+      background: var(--glass-bg);
+      backdrop-filter: blur(12px);
+      border: 1px solid var(--glass-border);
+      border-radius: var(--radius-lg);
+      padding: 0.25rem;
+      margin-bottom: 2rem;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: none;
+    }
+
+    .tab-nav::-webkit-scrollbar { display: none; }
+
+    .tab-btn {
+      flex: 1;
+      min-width: 0;
+      padding: 0.75rem 1rem;
+      min-height: 44px;
+      background: none;
+      border: none;
+      border-radius: var(--radius-md);
+      color: var(--text-muted);
+      font-family: var(--font-sans);
+      font-size: 0.875rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all var(--transition-fast);
+      white-space: nowrap;
+    }
+
+    .tab-btn:hover {
+      color: var(--text-secondary);
+      background: rgba(255, 255, 255, 0.04);
+    }
+
+    .tab-btn[aria-selected="true"] {
+      color: var(--text-primary);
+      background: linear-gradient(135deg, rgba(59, 130, 246, 0.2), rgba(139, 92, 246, 0.2));
+      box-shadow: 0 2px 10px rgba(59, 130, 246, 0.15);
+    }
+
+    /* Section Panels */
+    .tab-panel {
+      display: none;
+      animation: panelEnter 0.3s var(--ease-out);
+    }
+
+    .tab-panel[aria-hidden="false"] {
+      display: block;
+    }
+
+    @keyframes panelEnter {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* Cards */
+    .card {
+      background: var(--glass-bg);
+      backdrop-filter: blur(12px);
+      border: 1px solid var(--glass-border);
+      border-radius: var(--radius-lg);
+      padding: 1.5rem;
+      box-shadow: var(--shadow-card);
+      margin-bottom: 1.5rem;
+    }
+
+    .card h2 {
+      font-size: 1.1rem;
+      font-weight: 600;
+      margin-bottom: 1rem;
+      color: var(--text-primary);
+    }
+
+    .card h3 {
+      font-size: 0.95rem;
+      font-weight: 600;
+      margin-bottom: 0.75rem;
+      color: var(--text-secondary);
+    }
+
+    /* Buttons */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+      padding: 0.625rem 1.25rem;
+      min-height: 44px;
+      background: linear-gradient(135deg, var(--accent-blue), var(--accent-purple));
+      color: white;
+      border: none;
+      border-radius: var(--radius-md);
+      font-family: var(--font-sans);
+      font-size: 0.875rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all var(--transition-fast);
+      box-shadow: 0 2px 10px rgba(59, 130, 246, 0.25);
+    }
+
+    .btn:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 4px 16px rgba(59, 130, 246, 0.35);
+    }
+
+    .btn:active {
+      transform: translateY(0);
+    }
+
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .btn-secondary {
+      background: var(--bg-tertiary);
+      box-shadow: none;
+    }
+
+    .btn-secondary:hover {
+      background: var(--bg-quaternary);
+      box-shadow: none;
+    }
+
+    /* Range Slider */
+    input[type="range"] {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 100%;
+      height: 6px;
+      background: var(--bg-tertiary);
+      border-radius: 3px;
+      cursor: pointer;
+    }
+
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: var(--accent-blue);
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+      transition: transform 0.1s ease;
+    }
+
+    input[type="range"]::-moz-range-thumb {
+      width: 20px;
+      height: 20px;
+      border: none;
+      border-radius: 50%;
+      background: var(--accent-blue);
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+    }
+
+    input[type="range"]::-webkit-slider-thumb:hover {
+      transform: scale(1.15);
+    }
+
+    /* Code Panel */
+    .code-panel {
+      background: rgba(0, 0, 0, 0.3);
+      border-radius: var(--radius-md);
+      padding: 1rem;
+      font-family: var(--font-mono);
+      font-size: 0.8rem;
+      line-height: 1.6;
+      color: var(--text-secondary);
+      overflow-x: auto;
+      white-space: pre;
+      border: 1px solid var(--glass-border);
+    }
+
+    .code-panel .keyword { color: var(--accent-purple-light); }
+    .code-panel .function { color: var(--accent-blue-light); }
+    .code-panel .string { color: var(--accent-green); }
+    .code-panel .comment { color: var(--text-dim); }
+    .code-panel .number { color: var(--accent-orange); }
+
+    /* SVG shared */
+    .viz-container {
+      width: 100%;
+      overflow-x: auto;
+    }
+
+    .viz-container svg {
+      display: block;
+      margin: 0 auto;
+    }
+
+    /* Architecture Block Styles */
+    .arch-block {
+      cursor: pointer;
+      transition: filter var(--transition-fast);
+    }
+
+    .arch-block:hover {
+      filter: brightness(1.2);
+    }
+
+    .arch-block rect {
+      transition: all var(--transition-fast);
+    }
+
+    .arch-block:hover rect {
+      stroke-width: 2;
+    }
+
+    /* Dimension labels */
+    .dim-label {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      fill: var(--text-dim);
+    }
+
+    /* Training section */
+    .slider-row {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      margin-bottom: 1rem;
+    }
+
+    .slider-row label {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      white-space: nowrap;
+      min-width: 60px;
+    }
+
+    .slider-row .value {
+      font-family: var(--font-mono);
+      font-size: 0.85rem;
+      color: var(--accent-blue-light);
+      min-width: 60px;
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* Checkpoint samples */
+    .checkpoint-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 0.75rem;
+    }
+
+    .checkpoint-card {
+      background: rgba(0, 0, 0, 0.2);
+      border: 1px solid var(--glass-border);
+      border-radius: var(--radius-md);
+      padding: 0.75rem;
+      transition: border-color var(--transition-fast);
+    }
+
+    .checkpoint-card.active {
+      border-color: var(--accent-blue);
+      box-shadow: var(--shadow-glow-blue);
+    }
+
+    .checkpoint-card .step-label {
+      font-size: 0.75rem;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      margin-bottom: 0.375rem;
+    }
+
+    .checkpoint-card .names {
+      font-family: var(--font-mono);
+      font-size: 0.85rem;
+      color: var(--text-secondary);
+      line-height: 1.6;
+    }
+
+    /* Inference section */
+    .controls-row {
+      display: flex;
+      gap: 1rem;
+      align-items: flex-end;
+      flex-wrap: wrap;
+      margin-bottom: 1.5rem;
+    }
+
+    .control-group {
+      display: flex;
+      flex-direction: column;
+      gap: 0.375rem;
+      flex: 1;
+      min-width: 140px;
+    }
+
+    .control-group label {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+
+    .generated-name {
+      font-family: var(--font-mono);
+      font-size: 1.5rem;
+      font-weight: 600;
+      color: var(--text-primary);
+      min-height: 2.5rem;
+      display: flex;
+      align-items: center;
+      gap: 2px;
+    }
+
+    .generated-name .cursor {
+      display: inline-block;
+      width: 2px;
+      height: 1.4em;
+      background: var(--accent-blue);
+      animation: blink 1s step-end infinite;
+    }
+
+    @keyframes blink {
+      50% { opacity: 0; }
+    }
+
+    /* Probability bars */
+    .prob-bars {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .prob-bar-row {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      height: 20px;
+    }
+
+    .prob-bar-row .token-label {
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      width: 1.5rem;
+      text-align: center;
+    }
+
+    .prob-bar-row .bar-track {
+      flex: 1;
+      height: 14px;
+      background: rgba(0, 0, 0, 0.2);
+      border-radius: 2px;
+      overflow: hidden;
+    }
+
+    .prob-bar-row .bar-fill {
+      height: 100%;
+      background: var(--accent-blue);
+      border-radius: 2px;
+      transition: width var(--transition-fast);
+    }
+
+    .prob-bar-row .bar-fill.selected {
+      background: linear-gradient(90deg, var(--accent-blue), var(--accent-purple));
+    }
+
+    .prob-bar-row .prob-value {
+      font-family: var(--font-mono);
+      font-size: 0.7rem;
+      color: var(--text-dim);
+      width: 3rem;
+      text-align: right;
+    }
+
+    /* Attention heatmap */
+    .heatmap-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 1rem;
+    }
+
+    .heatmap-head {
+      text-align: center;
+    }
+
+    .heatmap-head .head-label {
+      font-size: 0.75rem;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      margin-bottom: 0.375rem;
+    }
+
+    .heatmap-head canvas {
+      width: 100%;
+      aspect-ratio: 1;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--glass-border);
+      image-rendering: pixelated;
+    }
+
+    /* Loading skeleton */
+    .skeleton {
+      background: linear-gradient(90deg,
+        var(--bg-tertiary) 25%,
+        var(--bg-quaternary) 50%,
+        var(--bg-tertiary) 75%
+      );
+      background-size: 200% 100%;
+      animation: shimmer 1.5s infinite;
+      border-radius: var(--radius-md);
+    }
+
+    @keyframes shimmer {
+      0% { background-position: 200% 0; }
+      100% { background-position: -200% 0; }
+    }
+
+    /* Responsive */
+    @media (max-width: 640px) {
+      .app { padding: 1.5rem 1rem 3rem; }
+      .header h1 { font-size: 1.5rem; }
+      .heatmap-grid { grid-template-columns: repeat(2, 1fr); }
+      .checkpoint-grid { grid-template-columns: 1fr; }
+      .controls-row { flex-direction: column; }
+    }
+
+    /* Reduced motion */
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+      }
+
+      .tab-panel { animation: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header class="header">
+      <h1>microGPT</h1>
+      <p>A 199-line, dependency-free GPT in pure Python</p>
+      <div class="stats">
+        <span class="stat"><strong>4,064</strong> params</span>
+        <span class="stat"><strong>1</strong> layer</span>
+        <span class="stat"><strong>4</strong> heads</span>
+        <span class="stat"><strong>16</strong>-dim</span>
+        <span class="stat"><strong>27</strong> vocab</span>
+      </div>
+    </header>
+
+    <nav class="tab-nav" role="tablist" aria-label="Visualization sections">
+      <button class="tab-btn" role="tab" id="tab-architecture" aria-controls="panel-architecture" aria-selected="true">Architecture</button>
+      <button class="tab-btn" role="tab" id="tab-training" aria-controls="panel-training" aria-selected="false">Training</button>
+      <button class="tab-btn" role="tab" id="tab-inference" aria-controls="panel-inference" aria-selected="false">Inference</button>
+    </nav>
+
+    <section class="tab-panel" role="tabpanel" id="panel-architecture" aria-labelledby="tab-architecture" aria-hidden="false">
+      <div class="card">
+        <h2>Forward Pass</h2>
+        <div style="display:flex;justify-content:center;margin-bottom:1rem">
+          <button class="btn" id="btn-animate">Run Forward Pass</button>
+        </div>
+        <div class="viz-container" id="arch-svg-container">
+          <div class="skeleton" style="height:600px"></div>
+        </div>
+      </div>
+      <div class="card" id="code-card" style="display:none">
+        <h3 id="code-title">Source Code</h3>
+        <div class="code-panel" id="code-content" role="region" aria-label="Python source code"></div>
+      </div>
+    </section>
+
+    <section class="tab-panel" role="tabpanel" id="panel-training" aria-labelledby="tab-training" aria-hidden="true">
+      <div class="card">
+        <h2>Training Progress</h2>
+        <div class="viz-container" id="training-svg-container">
+          <div class="skeleton" style="height:300px"></div>
+        </div>
+        <div class="slider-row" style="margin-top:1rem">
+          <label for="step-slider">Step</label>
+          <input type="range" id="step-slider" min="0" max="499" value="499" aria-label="Training step">
+          <span class="value" id="step-value">500</span>
+        </div>
+      </div>
+      <div class="card">
+        <h3>Generated Names at Checkpoints</h3>
+        <div class="checkpoint-grid" id="checkpoint-container">
+          <div class="skeleton" style="height:120px"></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="tab-panel" role="tabpanel" id="panel-inference" aria-labelledby="tab-inference" aria-hidden="true">
+      <div class="card">
+        <h2>Name Generator</h2>
+        <div class="controls-row">
+          <div class="control-group">
+            <label for="temp-slider">Temperature</label>
+            <div class="slider-row" style="margin-bottom:0">
+              <input type="range" id="temp-slider" min="1" max="10" value="5" aria-label="Temperature">
+              <span class="value" id="temp-value">0.5</span>
+            </div>
+          </div>
+          <button class="btn" id="btn-generate">Generate</button>
+        </div>
+        <div class="generated-name" id="generated-output" aria-live="polite">
+          <span class="cursor"></span>
+        </div>
+      </div>
+      <div class="card">
+        <h3>Token Probabilities</h3>
+        <div class="prob-bars" id="prob-bars-container" aria-label="Token probability distribution">
+          <div class="skeleton" style="height:400px"></div>
+        </div>
+      </div>
+      <div class="card">
+        <h3>Attention Weights</h3>
+        <div class="heatmap-grid" id="heatmap-container">
+          <div class="heatmap-head"><div class="head-label">Head 1</div><canvas width="8" height="8"></canvas></div>
+          <div class="heatmap-head"><div class="head-label">Head 2</div><canvas width="8" height="8"></canvas></div>
+          <div class="heatmap-head"><div class="head-label">Head 3</div><canvas width="8" height="8"></canvas></div>
+          <div class="heatmap-head"><div class="head-label">Head 4</div><canvas width="8" height="8"></canvas></div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>
