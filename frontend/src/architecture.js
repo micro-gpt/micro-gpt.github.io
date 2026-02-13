@@ -623,9 +623,19 @@ export function initArchitecture({ vocab }) {
       }
     });
 
-    // If a block is selected, update its display
-    if (activeBlockId) {
-      showBlockData(activeBlockId, currentIntermediates);
+    // Auto-select lm-head to show output, or update already-selected block
+    if (!activeBlockId) activeBlockId = 'lm-head';
+    showBlockData(activeBlockId, currentIntermediates);
+
+    // Visual highlight on the active block
+    svg.querySelectorAll('.arch-block').forEach(b => {
+      b.classList.toggle('active', b.getAttribute('data-block') === activeBlockId);
+    });
+
+    // Highlight source lines for active block
+    const activeBlock = BLOCKS.find(b => b.id === activeBlockId);
+    if (activeBlock && activeBlock.lines) {
+      highlightSourceLines(activeBlock.lines[0], activeBlock.lines[1]);
     }
   }
 
