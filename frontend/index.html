@@ -698,29 +698,102 @@
       50% { opacity: 0; }
     }
 
-    /* Token history */
-    .token-history {
+    /* Attention Explorer */
+    .attn-explorer {
       display: flex;
-      gap: 2px;
-      align-items: center;
-      flex-wrap: wrap;
-      margin-bottom: 0.75rem;
+      flex-direction: column;
+      gap: 1rem;
     }
 
-    .token-chip {
+    .attn-head-selector[data-head="0"][aria-pressed="true"],
+    .attn-head-selector button[data-head="0"][aria-pressed="true"] {
+      background: var(--accent-blue);
+    }
+
+    .attn-head-selector button[data-head="1"][aria-pressed="true"] {
+      background: var(--accent-purple);
+    }
+
+    .attn-head-selector button[data-head="2"][aria-pressed="true"] {
+      background: var(--accent-green);
+    }
+
+    .attn-head-selector button[data-head="3"][aria-pressed="true"] {
+      background: var(--accent-cyan);
+    }
+
+    .attn-token-row {
+      display: flex;
+      gap: 4px;
+      align-items: center;
+      flex-wrap: wrap;
+      min-height: 44px;
+    }
+
+    .attn-token {
       font-family: var(--font-mono);
-      font-size: 0.75rem;
-      padding: 2px 6px;
-      border-radius: var(--radius-sm);
+      font-size: 0.85rem;
+      padding: 0.375rem 0.625rem;
+      min-height: 44px;
+      min-width: 44px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: var(--radius-md);
       background: var(--bg-tertiary);
       color: var(--text-secondary);
       border: 1px solid var(--glass-border);
+      cursor: pointer;
+      transition: all var(--transition-fast);
     }
 
-    .token-chip.current {
+    .attn-token:hover {
+      background: var(--bg-quaternary);
+      border-color: var(--glass-border-hover);
+      color: var(--text-primary);
+    }
+
+    .attn-token.selected {
       background: rgba(59, 130, 246, 0.2);
       border-color: var(--accent-blue);
       color: var(--accent-blue-light);
+      box-shadow: 0 0 8px rgba(59, 130, 246, 0.2);
+    }
+
+    .attn-token.current {
+      border-color: var(--accent-purple);
+      box-shadow: 0 0 8px rgba(139, 92, 246, 0.15);
+    }
+
+    .attn-token.target {
+      background: rgba(59, 130, 246, 0.1);
+      border-color: var(--accent-blue);
+    }
+
+    .attn-arcs-svg {
+      width: 100%;
+      height: 0;
+      overflow: visible;
+    }
+
+    .attn-arc {
+      fill: none;
+      pointer-events: none;
+      transition: opacity var(--transition-fast);
+    }
+
+    .attn-arc-label {
+      font-family: var(--font-mono);
+      font-size: 0.6rem;
+      fill: var(--text-muted);
+      pointer-events: none;
+    }
+
+    .attn-hint {
+      color: var(--text-dim);
+      font-size: 0.85rem;
+      text-align: center;
+      padding: 1rem 0;
     }
 
     /* Probability bars */
@@ -790,32 +863,6 @@
       text-align: right;
     }
 
-    /* Attention heatmap */
-    .heatmap-grid {
-      display: grid;
-      grid-template-columns: repeat(4, 1fr);
-      gap: 1rem;
-    }
-
-    .heatmap-head {
-      text-align: center;
-    }
-
-    .heatmap-head .head-label {
-      font-size: 0.75rem;
-      color: var(--text-dim);
-      text-transform: uppercase;
-      letter-spacing: 0.06em;
-      margin-bottom: 0.375rem;
-    }
-
-    .heatmap-head canvas {
-      width: 100%;
-      aspect-ratio: 1;
-      border-radius: var(--radius-sm);
-      border: 1px solid var(--glass-border);
-      image-rendering: pixelated;
-    }
 
     /* Collapsible panel */
     .collapsible-header {
@@ -881,12 +928,14 @@
     @media (max-width: 640px) {
       .app { padding: 1.5rem 1rem 3rem; }
       .header h1 { font-size: 1.5rem; }
-      .heatmap-grid { grid-template-columns: repeat(2, 1fr); }
       .checkpoint-grid { grid-template-columns: 1fr; }
       .controls-row { flex-direction: column; }
       .prob-section { grid-template-columns: 1fr; }
       .weight-heatmap-grid { grid-template-columns: 1fr; }
       .input-selector { flex-direction: column; align-items: flex-start; }
+      .attn-head-selector { flex-wrap: wrap; }
+      .attn-token-row { overflow-x: auto; flex-wrap: nowrap; -webkit-overflow-scrolling: touch; }
+      .attn-token { flex-shrink: 0; }
     }
 
     /* Reduced motion */
@@ -1014,7 +1063,6 @@
           </div>
           <button class="btn" id="btn-generate">Generate</button>
         </div>
-        <div id="token-history" class="token-history" aria-label="Token sequence"></div>
         <div class="generated-name" id="generated-output" aria-live="polite">
           <span class="cursor"></span>
         </div>
@@ -1032,14 +1080,18 @@
           </div>
         </div>
       </div>
-      <div class="card">
-        <h3>Attention Weights</h3>
-        <div class="heatmap-grid" id="heatmap-container">
-          <div class="heatmap-head"><div class="head-label">Head 1</div><canvas width="8" height="8"></canvas></div>
-          <div class="heatmap-head"><div class="head-label">Head 2</div><canvas width="8" height="8"></canvas></div>
-          <div class="heatmap-head"><div class="head-label">Head 3</div><canvas width="8" height="8"></canvas></div>
-          <div class="heatmap-head"><div class="head-label">Head 4</div><canvas width="8" height="8"></canvas></div>
+      <div class="card attn-explorer" id="attn-viz-container">
+        <h3>Attention Explorer</h3>
+        <div class="attn-head-selector toggle-group" role="group" aria-label="Attention head filter">
+          <button data-head="all" aria-pressed="true">All</button>
+          <button data-head="0" aria-pressed="false">Head 1</button>
+          <button data-head="1" aria-pressed="false">Head 2</button>
+          <button data-head="2" aria-pressed="false">Head 3</button>
+          <button data-head="3" aria-pressed="false">Head 4</button>
         </div>
+        <div id="attn-token-row" class="attn-token-row" aria-label="Generated tokens"></div>
+        <svg id="attn-arcs-svg" class="attn-arcs-svg" aria-label="Attention arcs visualization"></svg>
+        <p id="attn-hint" class="attn-hint">Generate a name to explore attention patterns</p>
       </div>
       <div class="card">
         <div class="collapsible-header" id="infer-inter-toggle" role="button" tabindex="0" aria-expanded="false" aria-controls="infer-inter-content">

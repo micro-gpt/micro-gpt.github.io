@@ -1,12 +1,20 @@
 /**
  * Inference section — temperature control, token-by-token generation,
- * raw logits + probabilities, token history, attention heatmaps,
+ * raw logits + probabilities, interactive attention arc visualization,
  * collapsible intermediate values viewer.
  */
 
 import { gptForward, softmax, sampleFrom, N_LAYER, N_HEAD, BLOCK_SIZE } from './gpt.js';
 
+const SVG_NS = 'http://www.w3.org/2000/svg';
+const HEAD_COLORS = ['var(--accent-blue)', 'var(--accent-purple)', 'var(--accent-green)', 'var(--accent-cyan)'];
+
 let generating = false;
+let storedAttn = [];
+let storedTokens = [];
+let selectedTokenIdx = -1;
+let activeHead = 'all';
+let storedVocab = null;
 
 function renderBars(containerId, vocab) {
   const container = document.getElementById(containerId);
@@ -25,14 +33,12 @@ function updateProbBars(containerId, values, selectedToken, cssClass) {
   const container = document.getElementById(containerId);
   const rows = container.querySelectorAll('.prob-bar-row');
 
-  // Sort by value for display
   const indexed = Array.from(values).map((v, i) => ({ v, i }));
   indexed.sort((a, b) => b.v - a.v);
 
   const sortedRows = indexed.map(({ i }) => rows[i]);
   sortedRows.forEach(row => container.appendChild(row));
 
-  // Find max absolute for logit scale
   const maxAbs = Math.max(...values.map(Math.abs), 0.001);
 
   rows.forEach((row, i) => {
@@ -40,17 +46,14 @@ function updateProbBars(containerId, values, selectedToken, cssClass) {
     const fill = row.querySelector('.bar-fill');
     const valSpan = row.querySelector('.prob-value');
 
-    // Remove old classes
     fill.classList.remove('selected', 'logit-bar');
 
     if (cssClass === 'logit') {
-      // For logits, scale relative to max absolute value
       const pct = (Math.max(0, val) / maxAbs) * 100;
       fill.style.width = `${Math.min(pct, 100)}%`;
       fill.classList.add('logit-bar');
       valSpan.textContent = val.toFixed(2);
     } else {
-      // For probabilities
       const pct = val * 100;
       fill.style.width = `${Math.min(pct, 100)}%`;
       valSpan.textContent = pct < 1 ? `${pct.toFixed(1)}%` : `${pct.toFixed(0)}%`;
@@ -62,47 +65,166 @@ function updateProbBars(containerId, values, selectedToken, cssClass) {
   });
 }
 
-function updateHeatmaps(allStepAttn, seqLen) {
-  const canvases = document.querySelectorAll('#heatmap-container canvas');
+function renderAttnTokens() {
+  const container = document.getElementById('attn-token-row');
+  const hint = document.getElementById('attn-hint');
 
-  canvases.forEach((canvas, headIdx) => {
-    canvas.width = seqLen;
-    canvas.height = seqLen;
-    const ctx = canvas.getContext('2d');
-
-    for (let row = 0; row < seqLen; row++) {
-      const stepAttn = allStepAttn[row];
-      const headWeights = stepAttn ? stepAttn[headIdx] : null;
-
-      for (let col = 0; col < seqLen; col++) {
-        let val = 0;
-        if (headWeights && col < headWeights.length) {
-          val = headWeights[col];
-        }
-
-        const r = Math.round(15 + val * 220);
-        const g = Math.round(23 + val * 180);
-        const b = Math.round(42 + val * 213);
-        ctx.fillStyle = `rgb(${r}, ${g}, ${b})`;
-        ctx.fillRect(col, row, 1, 1);
-      }
-    }
-  });
-}
-
-function renderTokenHistory(tokens, vocab) {
-  const container = document.getElementById('token-history');
-  if (tokens.length === 0) {
+  if (storedTokens.length === 0) {
     container.innerHTML = '';
+    hint.style.display = '';
+    clearArcs();
     return;
   }
 
-  const chars = vocab.chars;
-  container.innerHTML = tokens.map((t, i) => {
-    const label = t === vocab.bos ? 'BOS' : chars[t];
-    const isCurrent = i === tokens.length - 1;
-    return `<span class="token-chip ${isCurrent ? 'current' : ''}">${label}</span>`;
+  hint.style.display = 'none';
+  const chars = storedVocab.chars;
+
+  container.innerHTML = storedTokens.map((t, i) => {
+    const label = t === storedVocab.bos ? 'BOS' : (chars[t] === ' ' ? '␣' : chars[t]);
+    const classes = ['attn-token'];
+    if (i === selectedTokenIdx) classes.push('selected');
+    if (i === storedTokens.length - 1 && generating) classes.push('current');
+    return `<button class="${classes.join(' ')}" data-idx="${i}" aria-label="Token ${i}: ${label}">${label}</button>`;
   }).join('');
+
+  const buttons = container.querySelectorAll('.attn-token');
+  buttons.forEach(btn => {
+    const idx = parseInt(btn.dataset.idx);
+
+    btn.addEventListener('click', () => {
+      if (generating) return;
+      if (selectedTokenIdx === idx) {
+        selectedTokenIdx = -1;
+        btn.classList.remove('selected');
+        clearArcs();
+      } else {
+        container.querySelectorAll('.attn-token').forEach(b => b.classList.remove('selected'));
+        selectedTokenIdx = idx;
+        btn.classList.add('selected');
+        renderArcs(idx);
+      }
+    });
+
+    btn.addEventListener('mouseenter', () => {
+      if (generating || selectedTokenIdx !== -1) return;
+      renderArcs(idx);
+    });
+
+    btn.addEventListener('mouseleave', () => {
+      if (generating || selectedTokenIdx !== -1) return;
+      clearArcs();
+    });
+  });
+
+  if (selectedTokenIdx >= 0 && selectedTokenIdx < storedTokens.length) {
+    renderArcs(selectedTokenIdx);
+  }
+}
+
+function measureTokenPositions() {
+  const container = document.getElementById('attn-token-row');
+  const svg = document.getElementById('attn-arcs-svg');
+  const svgRect = svg.getBoundingClientRect();
+  const buttons = container.querySelectorAll('.attn-token');
+
+  return Array.from(buttons).map(btn => {
+    const rect = btn.getBoundingClientRect();
+    return {
+      cx: rect.left + rect.width / 2 - svgRect.left,
+      top: rect.bottom - svgRect.top + 4,
+    };
+  });
+}
+
+function renderArcs(tokenIdx) {
+  const svg = document.getElementById('attn-arcs-svg');
+  svg.innerHTML = '';
+
+  if (tokenIdx < 0 || tokenIdx >= storedAttn.length) return;
+
+  const positions = measureTokenPositions();
+  if (positions.length === 0) return;
+
+  const stepAttn = storedAttn[tokenIdx];
+  if (!stepAttn) return;
+
+  // Mark target tokens
+  const tokenBtns = document.querySelectorAll('#attn-token-row .attn-token');
+  tokenBtns.forEach(b => b.classList.remove('target'));
+
+  const singleHead = activeHead !== 'all';
+  const headList = singleHead ? [parseInt(activeHead)] : [0, 1, 2, 3];
+
+  // Collect all arcs
+  const arcs = [];
+  for (const h of headList) {
+    const weights = stepAttn[h];
+    if (!weights) continue;
+    for (let t = 0; t < weights.length; t++) {
+      if (t === tokenIdx) continue; // skip self-attention
+      if (weights[t] < 0.01) continue;
+      arcs.push({ head: h, target: t, weight: weights[t] });
+    }
+  }
+
+  // Sort thin-first so heavy arcs render on top
+  arcs.sort((a, b) => a.weight - b.weight);
+
+  const y = positions[0].top;
+  let maxDepth = 0;
+
+  for (const arc of arcs) {
+    const srcPos = positions[tokenIdx];
+    const tgtPos = positions[arc.target];
+    if (!srcPos || !tgtPos) continue;
+
+    // Mark target token
+    if (tokenBtns[arc.target]) {
+      tokenBtns[arc.target].classList.add('target');
+    }
+
+    const x1 = srcPos.cx;
+    const x2 = tgtPos.cx;
+    const dist = Math.abs(tokenIdx - arc.target);
+    const depth = y + 12 + dist * 18;
+    if (depth > maxDepth) maxDepth = depth;
+
+    const strokeWidth = 1.5 + arc.weight * 4.5;
+    const opacity = singleHead
+      ? 0.3 + arc.weight * 0.65
+      : 0.2 + arc.weight * 0.5;
+
+    const path = document.createElementNS(SVG_NS, 'path');
+    path.setAttribute('d', `M ${x1},${y} Q ${(x1 + x2) / 2},${depth} ${x2},${y}`);
+    path.setAttribute('class', 'attn-arc');
+    path.setAttribute('stroke', HEAD_COLORS[arc.head]);
+    path.setAttribute('stroke-width', strokeWidth);
+    path.setAttribute('opacity', opacity);
+    svg.appendChild(path);
+
+    // Weight label on significant arcs in single-head mode
+    if (singleHead && arc.weight >= 0.1) {
+      const label = document.createElementNS(SVG_NS, 'text');
+      const midX = (x1 + x2) / 2;
+      const midY = (y + depth) / 2 + 4;
+      label.setAttribute('x', midX);
+      label.setAttribute('y', midY);
+      label.setAttribute('text-anchor', 'middle');
+      label.setAttribute('class', 'attn-arc-label');
+      label.textContent = `${Math.round(arc.weight * 100)}%`;
+      svg.appendChild(label);
+    }
+  }
+
+  // Set SVG height to fit arcs
+  svg.style.height = maxDepth > 0 ? `${maxDepth + 8}px` : '0';
+}
+
+function clearArcs() {
+  const svg = document.getElementById('attn-arcs-svg');
+  svg.innerHTML = '';
+  svg.style.height = '0';
+  document.querySelectorAll('#attn-token-row .attn-token').forEach(b => b.classList.remove('target'));
 }
 
 function renderIntermediateViewer(intermediates) {
@@ -113,21 +235,21 @@ function renderIntermediateViewer(intermediates) {
   }
 
   const sections = [
-    { key: 'tokEmb', label: 'Token Embedding', dim: 16 },
-    { key: 'posEmb', label: 'Position Embedding', dim: 16 },
-    { key: 'combined', label: 'Combined (tok + pos)', dim: 16 },
-    { key: 'postNorm0', label: 'After initial RMSNorm', dim: 16 },
-    { key: 'postNorm1', label: 'After pre-attention RMSNorm', dim: 16 },
-    { key: 'q', label: 'Q projection', dim: 16 },
-    { key: 'k', label: 'K projection', dim: 16 },
-    { key: 'v', label: 'V projection', dim: 16 },
-    { key: 'attnOut', label: 'Attention output', dim: 16 },
-    { key: 'postResidual1', label: 'After residual 1', dim: 16 },
-    { key: 'postNorm2', label: 'After pre-MLP RMSNorm', dim: 16 },
-    { key: 'mlpHidden', label: 'MLP hidden (64-dim)', dim: 64 },
-    { key: 'mlpActivated', label: 'After ReLU²', dim: 64 },
-    { key: 'mlpOut', label: 'MLP output', dim: 16 },
-    { key: 'postResidual2', label: 'Final hidden state', dim: 16 },
+    { key: 'tokEmb', label: 'Token Embedding' },
+    { key: 'posEmb', label: 'Position Embedding' },
+    { key: 'combined', label: 'Combined (tok + pos)' },
+    { key: 'postNorm0', label: 'After initial RMSNorm' },
+    { key: 'postNorm1', label: 'After pre-attention RMSNorm' },
+    { key: 'q', label: 'Q projection' },
+    { key: 'k', label: 'K projection' },
+    { key: 'v', label: 'V projection' },
+    { key: 'attnOut', label: 'Attention output' },
+    { key: 'postResidual1', label: 'After residual 1' },
+    { key: 'postNorm2', label: 'After pre-MLP RMSNorm' },
+    { key: 'mlpHidden', label: 'MLP hidden (64-dim)' },
+    { key: 'mlpActivated', label: 'After ReLU²' },
+    { key: 'mlpOut', label: 'MLP output' },
+    { key: 'postResidual2', label: 'Final hidden state' },
   ];
 
   const html = sections.map(({ key, label }) => {
@@ -163,15 +285,18 @@ async function generate(vocab, temperature) {
   output.innerHTML = '<span class="cursor"></span>';
   probTitle.textContent = `Probabilities (T=${temperature.toFixed(1)})`;
 
+  // Reset attention state
+  storedAttn = [];
+  storedTokens = [vocab.bos];
+  selectedTokenIdx = 0;
+
   const bos = vocab.bos;
   const chars = vocab.chars;
   const keys = Array.from({ length: N_LAYER }, () => []);
   const values = Array.from({ length: N_LAYER }, () => []);
 
   let tokenId = bos;
-  const tokens = [bos]; // include BOS in history
   const generatedTokens = [];
-  const allStepAttn = [];
 
   const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   const delay = reduceMotion ? 0 : 200;
@@ -179,36 +304,25 @@ async function generate(vocab, temperature) {
   for (let pos = 0; pos < BLOCK_SIZE; pos++) {
     const result = gptForward(tokenId, pos, keys, values, { intermediates: true });
     const { logits, attentionWeights, intermediates } = result;
-    allStepAttn.push(attentionWeights);
 
-    // Update raw logits display
+    storedAttn.push(attentionWeights);
+    selectedTokenIdx = pos;
+
     updateProbBars('logit-bars-container', logits, -1, 'logit');
 
-    // Apply temperature and show probabilities
     const scaled = logits.map(l => l / temperature);
     const probs = softmax(scaled);
-
-    // Sample
     tokenId = sampleFrom(probs);
 
-    // Update probability bars
     updateProbBars('prob-bars-container', Array.from(probs), tokenId, 'prob');
-
-    // Update heatmaps
-    updateHeatmaps(allStepAttn, pos + 1);
-
-    // Update intermediate viewer (last step's data)
     renderIntermediateViewer(intermediates);
+    renderAttnTokens();
 
     if (tokenId === bos) break;
 
     generatedTokens.push(tokenId);
-    tokens.push(tokenId);
+    storedTokens.push(tokenId);
 
-    // Update token history
-    renderTokenHistory(tokens, vocab);
-
-    // Show token in output
     output.innerHTML = generatedTokens.map(t => chars[t]).join('') + '<span class="cursor"></span>';
 
     if (delay > 0) {
@@ -216,17 +330,21 @@ async function generate(vocab, temperature) {
     }
   }
 
-  // Final state
+  // Final state — select last token
+  selectedTokenIdx = storedTokens.length - 1;
+  generating = false;
+  renderAttnTokens();
+
   output.innerHTML = generatedTokens.map(t => chars[t]).join('') || '<span style="color:var(--text-dim)">(empty)</span>';
 
   btn.disabled = false;
-  generating = false;
 }
 
 export function initInference({ vocab }) {
+  storedVocab = vocab;
+
   renderBars('logit-bars-container', vocab);
   renderBars('prob-bars-container', vocab);
-  renderTokenHistory([], vocab);
   renderIntermediateViewer(null);
 
   const tempSlider = document.getElementById('temp-slider');
@@ -241,6 +359,27 @@ export function initInference({ vocab }) {
     const temp = parseInt(tempSlider.value) / 10;
     generate(vocab, temp);
   });
+
+  // Head selector toggle
+  const headBtns = document.querySelectorAll('.attn-head-selector button');
+  headBtns.forEach(btn => {
+    btn.addEventListener('click', () => {
+      headBtns.forEach(b => b.setAttribute('aria-pressed', 'false'));
+      btn.setAttribute('aria-pressed', 'true');
+      activeHead = btn.dataset.head;
+      if (selectedTokenIdx >= 0) {
+        renderArcs(selectedTokenIdx);
+      }
+    });
+  });
+
+  // Re-render arcs on resize
+  const resizeObserver = new ResizeObserver(() => {
+    if (selectedTokenIdx >= 0 && storedAttn.length > 0) {
+      renderArcs(selectedTokenIdx);
+    }
+  });
+  resizeObserver.observe(document.getElementById('attn-viz-container'));
 
   // Collapsible intermediate viewer toggle
   const interToggle = document.getElementById('infer-inter-toggle');
