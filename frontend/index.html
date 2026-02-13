@@ -424,7 +424,7 @@
 
     .arch-split {
       display: grid;
-      grid-template-columns: 1fr 1fr;
+      grid-template-columns: 1.2fr 1fr;
       gap: 1.5rem;
     }
 
@@ -435,8 +435,12 @@
       max-height: calc(100dvh - 6rem);
       display: flex;
       flex-direction: column;
-      gap: 0;
+      gap: 1rem;
       overflow: hidden;
+    }
+
+    .arch-right > .card {
+      margin-bottom: 0;
     }
 
     .arch-right #arch-data-card {
@@ -497,16 +501,29 @@
     }
 
     .arch-block.dimmed {
-      opacity: 0.3;
+      opacity: 0.25;
+    }
+
+    .arch-block.dimmed:hover {
+      filter: none;
     }
 
     .arch-block.stepping rect {
-      stroke-width: 3;
-      filter: drop-shadow(0 0 8px rgba(255, 255, 255, 0.4));
+      stroke-width: 3.5;
     }
 
     .arch-block.lit rect {
       fill-opacity: 0.4;
+    }
+
+    .arch-step-label {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .arch-step-label strong {
+      color: var(--text-primary);
     }
 
     /* Dimension labels */
@@ -1064,6 +1081,7 @@
             <option value="7">7</option>
           </select>
           <button class="btn btn-sm" id="btn-run-forward">Run Forward Pass</button>
+          <span class="arch-step-label" id="arch-step-label" hidden></span>
         </div>
       </div>
       <div class="arch-split">

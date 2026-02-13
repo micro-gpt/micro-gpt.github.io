@@ -632,6 +632,8 @@ export function initArchitecture({ vocab }) {
     selectBlock(activeBlockId || 'lm-head');
   }
 
+  const stepLabel = document.getElementById('arch-step-label');
+
   // Animated forward pass — step through blocks one by one
   async function runForwardPassAnimated() {
     if (animating) return;
@@ -640,7 +642,7 @@ export function initArchitecture({ vocab }) {
 
     computeForwardPass();
 
-    const stepDelay = prefersReducedMotion.matches ? 0 : 300;
+    const stepDelay = prefersReducedMotion.matches ? 0 : 500;
 
     // Dim all blocks
     svg.querySelectorAll('.arch-block').forEach(g => {
@@ -652,12 +654,23 @@ export function initArchitecture({ vocab }) {
     });
 
     // Step through each block
-    for (const block of BLOCKS) {
+    for (let i = 0; i < BLOCKS.length; i++) {
+      const block = BLOCKS[i];
       const g = svg.querySelector(`[data-block="${block.id}"]`);
+      const rect = g.querySelector('rect');
+
+      // Show step label
+      stepLabel.hidden = false;
+      stepLabel.innerHTML = `<strong>${block.label}</strong> (${i + 1}/${BLOCKS.length})`;
 
       // Highlight stepping block
       g.classList.remove('dimmed');
       g.classList.add('stepping');
+      rect.style.fill = block.color + '50';
+      rect.style.stroke = block.color;
+
+      // Scroll SVG to keep stepping block visible
+      g.scrollIntoView({ behavior: 'auto', block: 'nearest' });
 
       // Select it (show data + scroll code)
       selectBlock(block.id);
@@ -673,11 +686,14 @@ export function initArchitecture({ vocab }) {
       g.classList.remove('stepping');
       g.classList.add('lit');
       if (block.interKey && currentIntermediates[block.interKey]) {
-        g.querySelector('rect').style.fill = block.color + '40';
+        rect.style.fill = block.color + '40';
+      } else {
+        rect.style.fill = block.color + '20';
       }
     }
 
-    // Final state: select lm-head
+    // Final state: select lm-head, hide step label
+    stepLabel.hidden = true;
     selectBlock('lm-head');
     animating = false;
     btnRun.disabled = false;
