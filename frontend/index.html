@@ -73,6 +73,7 @@
       max-width: 960px;
       margin: 0 auto;
       padding: 2rem 1.5rem 4rem;
+      transition: max-width var(--transition-normal);
     }
 
     /* Header */
@@ -416,6 +417,52 @@
     .code-panel .number { color: var(--accent-orange); }
     .code-panel .decorator { color: var(--accent-cyan); }
 
+    /* Architecture split layout */
+    .app.arch-wide {
+      max-width: 1200px;
+    }
+
+    .arch-split {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1.5rem;
+    }
+
+    .arch-right {
+      position: sticky;
+      top: 1rem;
+      align-self: start;
+      max-height: calc(100dvh - 6rem);
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+      overflow: hidden;
+    }
+
+    .arch-right #arch-data-card {
+      flex-shrink: 0;
+      max-height: 40%;
+      overflow-y: auto;
+    }
+
+    .arch-code-panel {
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .arch-code-panel h3 {
+      flex-shrink: 0;
+    }
+
+    .arch-code-panel .code-panel {
+      flex: 1;
+      max-height: none;
+      min-height: 0;
+    }
+
     /* SVG shared */
     .viz-container {
       width: 100%;
@@ -430,7 +477,7 @@
     /* Architecture Block Styles */
     .arch-block {
       cursor: pointer;
-      transition: filter var(--transition-fast);
+      transition: opacity var(--transition-fast), filter var(--transition-fast);
     }
 
     .arch-block:hover {
@@ -447,6 +494,19 @@
 
     .arch-block.active rect {
       stroke-width: 3;
+    }
+
+    .arch-block.dimmed {
+      opacity: 0.3;
+    }
+
+    .arch-block.stepping rect {
+      stroke-width: 3;
+      filter: drop-shadow(0 0 8px rgba(255, 255, 255, 0.4));
+    }
+
+    .arch-block.lit rect {
+      fill-opacity: 0.4;
     }
 
     /* Dimension labels */
@@ -925,6 +985,21 @@
     }
 
     /* Responsive */
+    @media (max-width: 768px) {
+      .arch-split {
+        grid-template-columns: 1fr;
+      }
+
+      .arch-right {
+        position: static;
+        max-height: none;
+      }
+
+      .arch-code-panel .code-panel {
+        max-height: 400px;
+      }
+    }
+
     @media (max-width: 640px) {
       .app { padding: 1.5rem 1rem 3rem; }
       .header h1 { font-size: 1.5rem; }
@@ -991,22 +1066,23 @@
           <button class="btn btn-sm" id="btn-run-forward">Run Forward Pass</button>
         </div>
       </div>
-      <div class="card">
-        <div class="viz-container" id="arch-svg-container">
-          <div class="skeleton" style="height:600px"></div>
+      <div class="arch-split">
+        <div class="arch-left">
+          <div class="card">
+            <div class="viz-container" id="arch-svg-container">
+              <div class="skeleton" style="height:600px"></div>
+            </div>
+          </div>
         </div>
-      </div>
-      <div class="card" id="arch-data-card" style="display:none">
-        <h3 id="arch-data-title">Intermediate Values</h3>
-        <div id="arch-data-content"></div>
-      </div>
-      <div class="card">
-        <div class="collapsible-header" id="source-toggle" role="button" tabindex="0" aria-expanded="false" aria-controls="source-panel-content">
-          <h3>Source Code — microgpt.py</h3>
-          <span class="chevron" aria-hidden="true">&#9660;</span>
-        </div>
-        <div class="collapsible-content" id="source-panel-content">
-          <div class="code-panel" id="source-code-panel" role="region" aria-label="Python source code"></div>
+        <div class="arch-right">
+          <div class="card" id="arch-data-card" hidden>
+            <h3 id="arch-data-title">Intermediate Values</h3>
+            <div id="arch-data-content"></div>
+          </div>
+          <div class="card arch-code-panel">
+            <h3>Source Code — microgpt.py</h3>
+            <div class="code-panel" id="source-code-panel" role="region" aria-label="Python source code"></div>
+          </div>
         </div>
       </div>
     </section>

@@ -394,7 +394,7 @@ function renderSourcePanel() {
   ).join('');
 }
 
-// Highlight specific line range in source
+// Highlight specific line range in source and scroll to it
 function highlightSourceLines(startLine, endLine) {
   const panel = document.getElementById('source-code-panel');
   const lines = panel.querySelectorAll('.line');
@@ -404,18 +404,9 @@ function highlightSourceLines(startLine, endLine) {
     lines[i].classList.add('highlighted');
   }
 
-  // Scroll to the highlighted lines
   const targetLine = lines[startLine - 1];
   if (targetLine) {
-    targetLine.scrollIntoView({ behavior: 'smooth', block: 'center' });
-  }
-
-  // Expand the source panel if collapsed
-  const toggle = document.getElementById('source-toggle');
-  const content = document.getElementById('source-panel-content');
-  if (toggle.getAttribute('aria-expanded') === 'false') {
-    toggle.setAttribute('aria-expanded', 'true');
-    content.classList.add('open');
+    targetLine.scrollIntoView({ behavior: 'auto', block: 'center' });
   }
 }
 
@@ -441,12 +432,10 @@ function createSVG() {
 
   const centerX = totalW / 2 - 30;
 
-  const blockPositions = [];
   BLOCKS.forEach((block, i) => {
     const y = padY + i * (blockH + gap);
     const w = block.wide ? blockWWide : blockW;
     const x = centerX - w / 2;
-    blockPositions.push({ x, y, w, h: blockH, block });
 
     // Connection line
     if (i < BLOCKS.length - 1) {
@@ -504,7 +493,7 @@ function createSVG() {
     svg.appendChild(g);
   });
 
-  return { svg, blockPositions };
+  return svg;
 }
 
 // Render a vector as colored cells
@@ -531,14 +520,14 @@ function showBlockData(blockId, intermediates) {
   const details = BLOCK_DETAILS[blockId];
 
   if (!details || !intermediates) {
-    card.style.display = 'none';
+    card.hidden = true;
     return;
   }
 
   title.textContent = details.title;
   const html = [];
 
-  for (const { key, label, dim } of details.keys) {
+  for (const { key, label } of details.keys) {
     const values = intermediates[key];
     if (values) {
       html.push(`<div class="data-viewer" style="margin-bottom:0.5rem">${renderVectorDisplay(values, label)}</div>`);
@@ -561,12 +550,14 @@ function showBlockData(blockId, intermediates) {
   }
 
   if (html.length === 0) {
-    html.push('<p style="color:var(--text-dim);font-size:0.85rem">No intermediate data for this block. Run a forward pass first.</p>');
+    html.push('<p style="color:var(--text-dim);font-size:0.85rem">No intermediate data for this block.</p>');
   }
 
   content.innerHTML = html.join('');
-  card.style.display = 'block';
+  card.hidden = false;
 }
+
+const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
 
 export function initArchitecture({ vocab }) {
   const container = document.getElementById('arch-svg-container');
@@ -580,85 +571,133 @@ export function initArchitecture({ vocab }) {
   tokenSelect.innerHTML = options + `<option value="${vocab.bos}">BOS</option>`;
 
   // Create SVG diagram
-  const { svg, blockPositions } = createSVG();
+  const svg = createSVG();
   container.innerHTML = '';
   container.appendChild(svg);
 
   // Render source panel
   renderSourcePanel();
 
-  // Source panel toggle
-  const sourceToggle = document.getElementById('source-toggle');
-  const sourceContent = document.getElementById('source-panel-content');
-  const toggleHandler = () => {
-    const expanded = sourceToggle.getAttribute('aria-expanded') === 'true';
-    sourceToggle.setAttribute('aria-expanded', !expanded);
-    sourceContent.classList.toggle('open');
-  };
-  sourceToggle.addEventListener('click', toggleHandler);
-  sourceToggle.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleHandler(); }
-  });
-
   // State
   let currentIntermediates = null;
   let activeBlockId = null;
+  let animating = false;
 
-  // Run forward pass and populate all blocks with real data
-  function runForwardPass() {
+  // Compute a forward pass and return intermediates
+  function computeForwardPass() {
     const tokenId = parseInt(tokenSelect.value);
     const posId = parseInt(posSelect.value);
     const keys = Array.from({ length: N_LAYER }, () => []);
     const values = Array.from({ length: N_LAYER }, () => []);
-
     const result = gptForward(tokenId, posId, keys, values, { intermediates: true });
     currentIntermediates = result.intermediates;
+  }
 
-    // Highlight blocks that have data
+  // Select a block: highlight SVG, show data, scroll code
+  function selectBlock(blockId) {
+    activeBlockId = blockId;
+
+    // SVG highlight
     svg.querySelectorAll('.arch-block').forEach(g => {
-      const blockId = g.getAttribute('data-block');
-      const block = BLOCKS.find(b => b.id === blockId);
-      if (block && block.interKey && currentIntermediates[block.interKey]) {
-        g.querySelector('rect').style.fill = block.color + '40';
-      }
+      g.classList.toggle('active', g.getAttribute('data-block') === blockId);
     });
 
-    // Auto-select lm-head to show output, or update already-selected block
-    if (!activeBlockId) activeBlockId = 'lm-head';
-    showBlockData(activeBlockId, currentIntermediates);
+    // Data panel
+    showBlockData(blockId, currentIntermediates);
 
-    // Visual highlight on the active block
-    svg.querySelectorAll('.arch-block').forEach(b => {
-      b.classList.toggle('active', b.getAttribute('data-block') === activeBlockId);
-    });
-
-    // Scroll data card into view
-    const dataCard = document.getElementById('arch-data-card');
-    if (dataCard.style.display !== 'none') {
-      dataCard.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    // Source line highlight
+    const block = BLOCKS.find(b => b.id === blockId);
+    if (block && block.lines) {
+      highlightSourceLines(block.lines[0], block.lines[1]);
     }
   }
 
-  btnRun.addEventListener('click', runForwardPass);
+  // Mark all blocks as lit (have data)
+  function lightAllBlocks() {
+    svg.querySelectorAll('.arch-block').forEach(g => {
+      const blockId = g.getAttribute('data-block');
+      const block = BLOCKS.find(b => b.id === blockId);
+      g.classList.remove('dimmed', 'stepping');
+      if (block && block.interKey && currentIntermediates[block.interKey]) {
+        g.classList.add('lit');
+        g.querySelector('rect').style.fill = block.color + '40';
+      }
+    });
+  }
+
+  // Instant forward pass — used on init and input change
+  function runForwardPassInstant() {
+    computeForwardPass();
+    lightAllBlocks();
+    selectBlock(activeBlockId || 'lm-head');
+  }
+
+  // Animated forward pass — step through blocks one by one
+  async function runForwardPassAnimated() {
+    if (animating) return;
+    animating = true;
+    btnRun.disabled = true;
+
+    computeForwardPass();
+
+    const stepDelay = prefersReducedMotion.matches ? 0 : 300;
+
+    // Dim all blocks
+    svg.querySelectorAll('.arch-block').forEach(g => {
+      g.classList.remove('active', 'lit', 'stepping');
+      g.classList.add('dimmed');
+      const blockId = g.getAttribute('data-block');
+      const block = BLOCKS.find(b => b.id === blockId);
+      if (block) g.querySelector('rect').style.fill = block.color + '20';
+    });
+
+    // Step through each block
+    for (const block of BLOCKS) {
+      const g = svg.querySelector(`[data-block="${block.id}"]`);
+
+      // Highlight stepping block
+      g.classList.remove('dimmed');
+      g.classList.add('stepping');
+
+      // Select it (show data + scroll code)
+      selectBlock(block.id);
+      // Remove .active since stepping takes visual precedence
+      g.classList.remove('active');
+      g.classList.add('stepping');
+
+      if (stepDelay > 0) {
+        await new Promise(r => setTimeout(r, stepDelay));
+      }
+
+      // Transition from stepping to lit
+      g.classList.remove('stepping');
+      g.classList.add('lit');
+      if (block.interKey && currentIntermediates[block.interKey]) {
+        g.querySelector('rect').style.fill = block.color + '40';
+      }
+    }
+
+    // Final state: select lm-head
+    selectBlock('lm-head');
+    animating = false;
+    btnRun.disabled = false;
+  }
+
+  btnRun.addEventListener('click', runForwardPassAnimated);
+
+  // Auto-update on input change
+  tokenSelect.addEventListener('change', () => {
+    if (!animating) runForwardPassInstant();
+  });
+  posSelect.addEventListener('change', () => {
+    if (!animating) runForwardPassInstant();
+  });
 
   // Block click handlers
   svg.querySelectorAll('.arch-block').forEach(g => {
     const handler = () => {
-      const blockId = g.getAttribute('data-block');
-      activeBlockId = blockId;
-
-      // Visual highlight
-      svg.querySelectorAll('.arch-block').forEach(b => b.classList.remove('active'));
-      g.classList.add('active');
-
-      // Show data
-      showBlockData(blockId, currentIntermediates);
-
-      // Highlight source lines
-      const block = BLOCKS.find(b => b.id === blockId);
-      if (block && block.lines) {
-        highlightSourceLines(block.lines[0], block.lines[1]);
-      }
+      if (animating) return;
+      selectBlock(g.getAttribute('data-block'));
     };
 
     g.addEventListener('click', handler);
@@ -669,5 +708,5 @@ export function initArchitecture({ vocab }) {
 
   // Run initial forward pass with BOS at position 0
   tokenSelect.value = String(vocab.bos);
-  runForwardPass();
+  runForwardPassInstant();
 }

@@ -66,6 +66,8 @@ function switchTab(tabId) {
     panel.setAttribute('aria-hidden', !visible);
   });
 
+  document.querySelector('.app').classList.toggle('arch-wide', sectionName === 'architecture');
+
   initSection(sectionName);
 }
 
@@ -91,4 +93,5 @@ document.querySelector('.tab-nav').addEventListener('keydown', (e) => {
 });
 
 // Init first section
+document.querySelector('.app').classList.add('arch-wide');
 initSection('architecture');
