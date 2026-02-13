@@ -632,10 +632,10 @@ export function initArchitecture({ vocab }) {
       b.classList.toggle('active', b.getAttribute('data-block') === activeBlockId);
     });
 
-    // Highlight source lines for active block
-    const activeBlock = BLOCKS.find(b => b.id === activeBlockId);
-    if (activeBlock && activeBlock.lines) {
-      highlightSourceLines(activeBlock.lines[0], activeBlock.lines[1]);
+    // Scroll data card into view
+    const dataCard = document.getElementById('arch-data-card');
+    if (dataCard.style.display !== 'none') {
+      dataCard.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     }
   }
 
