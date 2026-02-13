@@ -1,7 +1,7 @@
 /**
- * Architecture section — step-through block explorer with focused detail panel.
- * Click any block, use Next/Back, or click step dots to navigate.
- * Each step shows title, description, code snippet, and data visualization.
+ * Architecture section — scrollytelling block explorer.
+ * Sticky SVG diagram on left, scrollable narrative blocks on right.
+ * Scroll position drives SVG block highlighting via IntersectionObserver.
  */
 
 import { gptForward, softmax, N_LAYER } from './gpt.js';
@@ -20,7 +20,7 @@ const BLOCKS = [
   { id: 'softmax', label: 'Softmax', color: '#22c55e', dimOut: '27 probs', interKey: 'probs', lines: [97, 101], desc: 'Convert raw logits into a probability distribution' },
 ];
 
-// Detailed intermediate data labels (shown when a block is clicked)
+// Detailed intermediate data labels per block
 const BLOCK_DETAILS = {
   'tok-embed': { title: 'Token Embedding', keys: [{ key: 'tokEmb', label: 'wte[token_id]', dim: 16 }] },
   'pos-embed': { title: 'Position Embedding', keys: [{ key: 'posEmb', label: 'wpe[pos_id]', dim: 16 }, { key: 'combined', label: 'tok + pos', dim: 16 }] },
@@ -455,56 +455,47 @@ function renderProbBars(probs, vocab) {
   return `<div class="arch-data-section"><span class="arch-data-label">Top 10 token probabilities</span><div class="arch-prob-bars">${rows}</div></div>`;
 }
 
-// Render the detail panel for the currently selected block
-function renderDetail(blockIndex, intermediates, vocab) {
-  const panel = document.getElementById('arch-detail-content');
-  if (blockIndex === null) {
-    panel.innerHTML = '<p class="arch-detail-welcome">Select a block to see its code and output, or step through with the arrows.</p>';
-    return;
-  }
+// Render all 11 narrative blocks into the narrative container
+function renderNarrativeBlocks(intermediates, vocab) {
+  const container = document.getElementById('arch-narrative-container');
+  container.innerHTML = BLOCKS.map((block, i) => {
+    const details = BLOCK_DETAILS[block.id];
+    const html = [];
+    html.push(`<h3 class="arch-detail-title">${escHtml(details.title)}</h3>`);
+    html.push(`<p class="arch-detail-desc">${escHtml(block.desc)}</p>`);
+    html.push(renderCodeSnippet(block.lines[0], block.lines[1]));
+    html.push(`<div class="arch-narrative-data">${renderBlockData(i, intermediates, vocab)}</div>`);
+    return `<div class="arch-narrative" data-block-index="${i}"><div class="card" style="--block-color: ${block.color}">${html.join('')}</div></div>`;
+  }).join('');
+}
 
+// Render data visualization HTML for a single block
+function renderBlockData(blockIndex, intermediates, vocab) {
+  if (!intermediates) return '';
   const block = BLOCKS[blockIndex];
   const details = BLOCK_DETAILS[block.id];
-  const html = [];
-
-  // Title
-  html.push(`<h3 class="arch-detail-title">${escHtml(details.title)}</h3>`);
-  // Description
-  html.push(`<p class="arch-detail-desc">${escHtml(block.desc)}</p>`);
-  // Code snippet
-  html.push(renderCodeSnippet(block.lines[0], block.lines[1]));
-
-  // Data visualization
-  if (intermediates) {
-    if (block.id === 'softmax') {
-      // Probability bars for softmax
-      const probs = intermediates.probs;
-      if (probs) {
-        html.push(renderProbBars(probs, vocab));
-      }
-    } else {
-      // Standard data bars for other blocks
-      for (const { key, label } of details.keys) {
-        const values = intermediates[key];
-        if (values) {
-          html.push(renderDataBars(values, label));
-        }
-      }
-    }
+  if (block.id === 'softmax') {
+    return intermediates.probs ? renderProbBars(intermediates.probs, vocab) : '';
   }
+  return details.keys.map(({ key, label }) => {
+    const values = intermediates[key];
+    return values ? renderDataBars(values, label) : '';
+  }).join('');
+}
 
-  panel.innerHTML = html.join('');
+// Update only the data sections within narrative blocks (after forward pass recompute)
+function updateNarrativeData(intermediates, vocab) {
+  const container = document.getElementById('arch-narrative-container');
+  container.querySelectorAll('.arch-narrative').forEach((el, i) => {
+    const dataEl = el.querySelector('.arch-narrative-data');
+    if (dataEl) dataEl.innerHTML = renderBlockData(i, intermediates, vocab);
+  });
 }
 
 // Render step dots navigation
 function renderStepDots(container, currentIndex) {
   container.innerHTML = BLOCKS.map((block, i) => {
-    let stateClass = '';
-    if (currentIndex !== null) {
-      if (i === currentIndex) stateClass = 'current';
-      else if (i < currentIndex) stateClass = 'completed';
-      else stateClass = 'upcoming';
-    }
+    const stateClass = i === currentIndex ? 'current' : i < currentIndex ? 'completed' : 'upcoming';
     return `<button class="arch-dot ${stateClass}" data-index="${i}" aria-label="${block.label} (step ${i + 1} of ${BLOCKS.length})" title="${block.label}" style="--dot-color:${block.color}"></button>`;
   }).join('');
 }
@@ -518,12 +509,7 @@ function updateBlockStates(svg, currentIndex) {
     g.classList.remove('current', 'completed', 'upcoming');
     g.removeAttribute('aria-current');
 
-    if (currentIndex === null) {
-      // Neutral state
-      rect.setAttribute('fill', block.color + '20');
-      rect.setAttribute('stroke-width', '1.5');
-      g.style.opacity = '1';
-    } else if (i === currentIndex) {
+    if (i === currentIndex) {
       g.classList.add('current');
       g.setAttribute('aria-current', 'step');
       rect.setAttribute('fill', block.color + '50');
@@ -632,6 +618,7 @@ function createSVG() {
 
 export function initArchitecture({ vocab }) {
   const container = document.getElementById('arch-svg-container');
+  const narrativeContainer = document.getElementById('arch-narrative-container');
   const tokenSelect = document.getElementById('arch-token-select');
   const posSelect = document.getElementById('arch-pos-select');
   const btnRun = document.getElementById('btn-run-forward');
@@ -654,7 +641,7 @@ export function initArchitecture({ vocab }) {
 
   // State
   let currentIntermediates = null;
-  let currentIndex = null; // null = no block selected
+  let currentIndex = 0;
 
   // Compute a forward pass and return intermediates
   function computeForwardPass() {
@@ -664,12 +651,11 @@ export function initArchitecture({ vocab }) {
     const values = Array.from({ length: N_LAYER }, () => []);
     const result = gptForward(tokenId, posId, keys, values, { intermediates: true });
     currentIntermediates = result.intermediates;
-    // Compute softmax probabilities
     currentIntermediates.probs = Array.from(softmax(result.logits));
   }
 
-  // Select a block by index
-  function selectBlock(index) {
+  // Highlight a block by index (updates SVG, dots, source, active narrative)
+  function highlightBlock(index) {
     currentIndex = index;
 
     // Update SVG visual states
@@ -680,77 +666,65 @@ export function initArchitecture({ vocab }) {
     attachDotListeners();
 
     // Update button states
-    btnBack.disabled = currentIndex === null || currentIndex === 0;
+    btnBack.disabled = currentIndex === 0;
     btnNext.disabled = currentIndex === BLOCKS.length - 1;
 
-    // Render detail panel
-    renderDetail(currentIndex, currentIntermediates, vocab);
+    // Update active narrative block
+    narrativeContainer.querySelectorAll('.arch-narrative').forEach((el, i) => {
+      el.classList.toggle('active', i === currentIndex);
+    });
 
     // Update full source highlighting (if collapsible is open)
-    if (currentIndex !== null) {
-      const block = BLOCKS[currentIndex];
-      const fullSourceContent = document.getElementById('arch-full-source-content');
-      if (fullSourceContent.classList.contains('open')) {
-        highlightFullSourceLines(block.lines[0], block.lines[1]);
-      }
+    const block = BLOCKS[currentIndex];
+    const fullSourceContent = document.getElementById('arch-full-source-content');
+    if (fullSourceContent.classList.contains('open')) {
+      highlightFullSourceLines(block.lines[0], block.lines[1]);
     }
+  }
 
-    // Scroll the current SVG block into view
-    if (currentIndex !== null) {
-      const g = svg.querySelector(`[data-index="${currentIndex}"]`);
-      if (g) g.scrollIntoView({ behavior: 'auto', block: 'nearest' });
-    }
+  // Scroll to a narrative block and highlight it
+  function scrollToBlock(index) {
+    const narrativeEl = narrativeContainer.querySelector(`[data-block-index="${index}"]`);
+    if (narrativeEl) narrativeEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    highlightBlock(index);
   }
 
   function attachDotListeners() {
     dotsContainer.querySelectorAll('.arch-dot').forEach(dot => {
       dot.addEventListener('click', () => {
-        selectBlock(parseInt(dot.dataset.index));
+        scrollToBlock(parseInt(dot.dataset.index));
       });
     });
   }
 
-  // Navigation
+  // Navigation — scroll to prev/next narrative block
   btnBack.addEventListener('click', () => {
-    if (currentIndex !== null && currentIndex > 0) {
-      selectBlock(currentIndex - 1);
-    }
+    if (currentIndex > 0) scrollToBlock(currentIndex - 1);
   });
 
   btnNext.addEventListener('click', () => {
-    if (currentIndex === null) {
-      selectBlock(0);
-    } else if (currentIndex < BLOCKS.length - 1) {
-      selectBlock(currentIndex + 1);
-    }
+    if (currentIndex < BLOCKS.length - 1) scrollToBlock(currentIndex + 1);
   });
 
-  // Run Forward Pass: recompute + restart at block 0
+  // Run Forward Pass: recompute + update all narrative data
   btnRun.addEventListener('click', () => {
     computeForwardPass();
-    selectBlock(0);
+    updateNarrativeData(currentIntermediates, vocab);
   });
 
   // Auto-update on input change
   tokenSelect.addEventListener('change', () => {
     computeForwardPass();
-    if (currentIndex !== null) {
-      renderDetail(currentIndex, currentIntermediates, vocab);
-    }
+    updateNarrativeData(currentIntermediates, vocab);
   });
   posSelect.addEventListener('change', () => {
     computeForwardPass();
-    if (currentIndex !== null) {
-      renderDetail(currentIndex, currentIntermediates, vocab);
-    }
+    updateNarrativeData(currentIntermediates, vocab);
   });
 
-  // Block click handlers on SVG
+  // SVG block click → scroll to narrative
   svg.querySelectorAll('.arch-block').forEach(g => {
-    const handler = () => {
-      selectBlock(parseInt(g.dataset.index));
-    };
-
+    const handler = () => scrollToBlock(parseInt(g.dataset.index));
     g.addEventListener('click', handler);
     g.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handler(); }
@@ -763,8 +737,7 @@ export function initArchitecture({ vocab }) {
   function toggleFullSource() {
     const isOpen = fullSourceContent.classList.toggle('open');
     fullSourceToggle.setAttribute('aria-expanded', isOpen);
-    // If opening and a block is selected, highlight its lines
-    if (isOpen && currentIndex !== null) {
+    if (isOpen) {
       const block = BLOCKS[currentIndex];
       highlightFullSourceLines(block.lines[0], block.lines[1]);
     }
@@ -778,10 +751,22 @@ export function initArchitecture({ vocab }) {
   tokenSelect.value = String(vocab.bos);
   computeForwardPass();
 
-  // Start with no block selected (welcome state)
-  renderStepDots(dotsContainer, null);
-  attachDotListeners();
-  btnBack.disabled = true;
-  btnNext.disabled = false;
-  renderDetail(null, null, vocab);
+  // Render all narrative blocks with data
+  renderNarrativeBlocks(currentIntermediates, vocab);
+
+  // Set up scroll observer — highlights block when it enters top 40% of viewport
+  const scrollObserver = new IntersectionObserver((entries) => {
+    for (const entry of entries) {
+      if (entry.isIntersecting) {
+        highlightBlock(parseInt(entry.target.dataset.blockIndex));
+      }
+    }
+  }, { rootMargin: '0px 0px -60% 0px', threshold: 0 });
+
+  narrativeContainer.querySelectorAll('.arch-narrative').forEach(el => {
+    scrollObserver.observe(el);
+  });
+
+  // Start at block 0
+  highlightBlock(0);
 }

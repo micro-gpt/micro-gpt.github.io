@@ -426,20 +426,16 @@
     /* Architecture split layout */
     .arch-split {
       display: grid;
-      grid-template-columns: 1.2fr 1fr;
+      grid-template-columns: 1fr 1fr;
       gap: 1.5rem;
     }
 
-    .arch-right {
+    .arch-left {
       position: sticky;
       top: 4rem;
       align-self: start;
       max-height: calc(100dvh - 5rem);
       overflow-y: auto;
-    }
-
-    .arch-right > .card {
-      margin-bottom: 0;
     }
 
     /* Step navigation (Back / dots / Next) */
@@ -487,13 +483,18 @@
       opacity: 0.35;
     }
 
-    /* Detail panel content */
-    .arch-detail-welcome {
-      color: var(--text-dim);
-      font-size: 0.9rem;
-      text-align: center;
-      padding: 2rem 1rem;
-      line-height: 1.5;
+    /* Narrative blocks */
+    .arch-narrative {
+      scroll-margin-top: 4rem;
+    }
+
+    .arch-narrative .card {
+      border-left: 3px solid var(--block-color);
+    }
+
+    .arch-narrative.active .card {
+      border-color: var(--glass-border-hover);
+      border-left: 3px solid var(--block-color);
     }
 
     .arch-detail-title {
@@ -1129,7 +1130,7 @@
         grid-template-columns: 1fr;
       }
 
-      .arch-right {
+      .arch-left {
         position: static;
         max-height: none;
       }
@@ -1213,16 +1214,14 @@
               <div class="skeleton" style="height:600px"></div>
             </div>
           </div>
-        </div>
-        <div class="arch-right">
-          <div class="card arch-detail">
-            <div class="arch-step-nav">
-              <button class="btn btn-secondary btn-sm" id="arch-btn-back" disabled aria-label="Previous block">&#8592; Back</button>
-              <div class="arch-step-dots" id="arch-step-dots" role="group" aria-label="Block steps"></div>
-              <button class="btn btn-secondary btn-sm" id="arch-btn-next" aria-label="Next block">Next &#8594;</button>
-            </div>
-            <div id="arch-detail-content"></div>
+          <div class="arch-step-nav">
+            <button class="btn btn-secondary btn-sm" id="arch-btn-back" disabled aria-label="Previous block">&#8592; Back</button>
+            <div class="arch-step-dots" id="arch-step-dots" role="group" aria-label="Block steps"></div>
+            <button class="btn btn-secondary btn-sm" id="arch-btn-next" aria-label="Next block">Next &#8594;</button>
           </div>
+        </div>
+        <div class="arch-right" id="arch-narrative-container">
+          <!-- JS renders narrative blocks here -->
         </div>
       </div>
       <div class="card arch-full-source-card">
