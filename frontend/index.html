@@ -70,10 +70,9 @@
     }
 
     .app {
-      max-width: 960px;
+      max-width: 1200px;
       margin: 0 auto;
       padding: 2rem 1.5rem 4rem;
-      transition: max-width var(--transition-normal);
     }
 
     /* Header */
@@ -150,8 +149,11 @@
       font-variant-numeric: tabular-nums;
     }
 
-    /* Tab Navigation */
-    .tab-nav {
+    /* Mini Navigation */
+    .mini-nav {
+      position: sticky;
+      top: 0;
+      z-index: 100;
       display: flex;
       gap: 0.25rem;
       background: var(--glass-bg);
@@ -160,54 +162,58 @@
       border-radius: var(--radius-lg);
       padding: 0.25rem;
       margin-bottom: 2rem;
-      overflow-x: auto;
-      -webkit-overflow-scrolling: touch;
-      scrollbar-width: none;
     }
 
-    .tab-nav::-webkit-scrollbar { display: none; }
-
-    .tab-btn {
+    .mini-nav-link {
       flex: 1;
       min-width: 0;
       padding: 0.75rem 1rem;
       min-height: 44px;
-      background: none;
-      border: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
       border-radius: var(--radius-md);
       color: var(--text-muted);
-      font-family: var(--font-sans);
       font-size: 0.875rem;
       font-weight: 500;
+      text-decoration: none;
       cursor: pointer;
       transition: all var(--transition-fast);
       white-space: nowrap;
     }
 
-    .tab-btn:hover {
+    .mini-nav-link:hover {
       color: var(--text-secondary);
       background: rgba(255, 255, 255, 0.04);
     }
 
-    .tab-btn[aria-selected="true"] {
+    .mini-nav-link.active {
       color: var(--text-primary);
       background: linear-gradient(135deg, rgba(59, 130, 246, 0.2), rgba(139, 92, 246, 0.2));
       box-shadow: 0 2px 10px rgba(59, 130, 246, 0.15);
     }
 
-    /* Section Panels */
-    .tab-panel {
-      display: none;
-      animation: panelEnter 0.3s var(--ease-out);
+    /* Scroll Sections */
+    .scroll-section {
+      scroll-margin-top: 4rem;
+      margin-bottom: 4rem;
+      opacity: 0;
+      transform: translateY(12px);
+      transition: opacity 0.5s var(--ease-out), transform 0.5s var(--ease-out);
     }
 
-    .tab-panel[aria-hidden="false"] {
-      display: block;
+    .scroll-section.visible {
+      opacity: 1;
+      transform: none;
     }
 
-    @keyframes panelEnter {
-      from { opacity: 0; transform: translateY(8px); }
-      to { opacity: 1; transform: translateY(0); }
+    /* Train mode controls */
+    .train-mode-controls {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      margin-bottom: 1rem;
+      flex-wrap: wrap;
     }
 
     /* Cards */
@@ -418,10 +424,6 @@
     .code-panel .decorator { color: var(--accent-cyan); }
 
     /* Architecture split layout */
-    .app.arch-wide {
-      max-width: 1200px;
-    }
-
     .arch-split {
       display: grid;
       grid-template-columns: 1.2fr 1fr;
@@ -430,9 +432,9 @@
 
     .arch-right {
       position: sticky;
-      top: 1rem;
+      top: 4rem;
       align-self: start;
-      max-height: calc(100dvh - 6rem);
+      max-height: calc(100dvh - 5rem);
       overflow-y: auto;
     }
 
@@ -1136,6 +1138,7 @@
     @media (max-width: 640px) {
       .app { padding: 1.5rem 1rem 3rem; }
       .header h1 { font-size: 1.5rem; }
+      .scroll-section { scroll-margin-top: 3.5rem; margin-bottom: 3rem; }
       .checkpoint-grid { grid-template-columns: 1fr; }
       .controls-row { flex-direction: column; }
       .prob-section { grid-template-columns: 1fr; }
@@ -1154,7 +1157,11 @@
         transition-duration: 0.01ms !important;
       }
 
-      .tab-panel { animation: none; }
+      .scroll-section {
+        opacity: 1;
+        transform: none;
+        transition: none;
+      }
     }
   </style>
 </head>
@@ -1172,14 +1179,14 @@
       </div>
     </header>
 
-    <nav class="tab-nav" role="tablist" aria-label="Visualization sections">
-      <button class="tab-btn" role="tab" id="tab-architecture" aria-controls="panel-architecture" aria-selected="true">Architecture</button>
-      <button class="tab-btn" role="tab" id="tab-training" aria-controls="panel-training" aria-selected="false">Training</button>
-      <button class="tab-btn" role="tab" id="tab-inference" aria-controls="panel-inference" aria-selected="false">Inference</button>
+    <nav class="mini-nav" role="navigation" aria-label="Visualization sections">
+      <a class="mini-nav-link active" data-section="architecture" href="#section-architecture" aria-current="true">Architecture</a>
+      <a class="mini-nav-link" data-section="training" href="#section-training" aria-current="false">Training</a>
+      <a class="mini-nav-link" data-section="inference" href="#section-inference" aria-current="false">Inference</a>
     </nav>
 
     <!-- ===== ARCHITECTURE ===== -->
-    <section class="tab-panel" role="tabpanel" id="panel-architecture" aria-labelledby="tab-architecture" aria-hidden="false">
+    <section class="scroll-section visible" id="section-architecture" data-section="architecture">
       <div class="card">
         <h2>Forward Pass</h2>
         <div class="input-selector" id="arch-input-selector">
@@ -1230,10 +1237,10 @@
     </section>
 
     <!-- ===== TRAINING ===== -->
-    <section class="tab-panel" role="tabpanel" id="panel-training" aria-labelledby="tab-training" aria-hidden="true">
+    <section class="scroll-section" id="section-training" data-section="training">
       <div class="card">
         <h2>Training Progress</h2>
-        <div id="train-mode-controls" style="display:flex;align-items:center;gap:1rem;margin-bottom:1rem;flex-wrap:wrap">
+        <div class="train-mode-controls" id="train-mode-controls">
           <div class="toggle-group" role="group" aria-label="Training mode">
             <button id="btn-pretrained" aria-pressed="true">Pre-trained</button>
             <button id="btn-train-scratch" aria-pressed="false">Train from Scratch</button>
@@ -1268,7 +1275,7 @@
     </section>
 
     <!-- ===== INFERENCE ===== -->
-    <section class="tab-panel" role="tabpanel" id="panel-inference" aria-labelledby="tab-inference" aria-hidden="true">
+    <section class="scroll-section" id="section-inference" data-section="inference">
       <div class="card">
         <h2>Name Generator</h2>
         <div class="controls-row">
