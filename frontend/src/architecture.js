@@ -1,23 +1,23 @@
 /**
- * Architecture section — live data viewer + full source panel.
- * Click any block → shows actual numeric values from a real forward pass.
- * Full microgpt.py source with line highlighting per block.
+ * Architecture section — step-through block explorer with focused detail panel.
+ * Click any block, use Next/Back, or click step dots to navigate.
+ * Each step shows title, description, code snippet, and data visualization.
  */
 
-import { gptForward, N_LAYER } from './gpt.js';
+import { gptForward, softmax, N_LAYER } from './gpt.js';
 
 const BLOCKS = [
-  { id: 'tok-embed', label: 'Token Embed', color: '#3b82f6', dimOut: '16-dim', interKey: 'tokEmb', lines: [109, 109] },
-  { id: 'pos-embed', label: '+ Pos Embed', color: '#3b82f6', dimOut: '16-dim', interKey: 'combined', lines: [110, 111] },
-  { id: 'rmsnorm0', label: 'RMSNorm', color: '#8b5cf6', dimOut: '16-dim', interKey: 'postNorm0', lines: [103, 106] },
-  { id: 'rmsnorm1', label: 'RMSNorm', color: '#8b5cf6', dimOut: '16-dim', interKey: 'postNorm1', lines: [103, 106] },
-  { id: 'attention', label: 'Multi-Head Attention', color: '#06b6d4', dimOut: '16-dim', interKey: 'attnOut', wide: true, lines: [118, 133] },
-  { id: 'residual1', label: '+ Residual', color: '#64748b', dimOut: '16-dim', interKey: 'postResidual1', lines: [134, 134] },
-  { id: 'rmsnorm2', label: 'RMSNorm', color: '#8b5cf6', dimOut: '16-dim', interKey: 'postNorm2', lines: [103, 106] },
-  { id: 'mlp', label: 'MLP (ReLU²)', color: '#f97316', dimOut: '16-dim', interKey: 'mlpOut', wide: true, lines: [138, 140] },
-  { id: 'residual2', label: '+ Residual', color: '#64748b', dimOut: '16-dim', interKey: 'postResidual2', lines: [141, 141] },
-  { id: 'lm-head', label: 'LM Head', color: '#22c55e', dimOut: '27 logits', interKey: 'logits', lines: [143, 143] },
-  { id: 'softmax', label: 'Softmax', color: '#22c55e', dimOut: '27 probs', interKey: null, lines: [97, 101] },
+  { id: 'tok-embed', label: 'Token Embed', color: '#3b82f6', dimOut: '16-dim', interKey: 'tokEmb', lines: [109, 109], desc: 'Look up the learned 16-dimensional vector for this token' },
+  { id: 'pos-embed', label: '+ Pos Embed', color: '#3b82f6', dimOut: '16-dim', interKey: 'combined', lines: [110, 111], desc: 'Add position information so the model knows token order' },
+  { id: 'rmsnorm0', label: 'RMSNorm', color: '#8b5cf6', dimOut: '16-dim', interKey: 'postNorm0', lines: [103, 106], desc: 'Normalize the vector magnitude to stabilize training' },
+  { id: 'rmsnorm1', label: 'RMSNorm', color: '#8b5cf6', dimOut: '16-dim', interKey: 'postNorm1', lines: [103, 106], desc: 'Normalize before attention to keep gradients stable' },
+  { id: 'attention', label: 'Multi-Head Attention', color: '#06b6d4', dimOut: '16-dim', interKey: 'attnOut', wide: true, lines: [118, 133], desc: '4 heads independently compute attention weights, then combine' },
+  { id: 'residual1', label: '+ Residual', color: '#64748b', dimOut: '16-dim', interKey: 'postResidual1', lines: [134, 134], desc: 'Add the original input back, preserving earlier information' },
+  { id: 'rmsnorm2', label: 'RMSNorm', color: '#8b5cf6', dimOut: '16-dim', interKey: 'postNorm2', lines: [103, 106], desc: 'Normalize before the MLP feed-forward layer' },
+  { id: 'mlp', label: 'MLP (ReLU²)', color: '#f97316', dimOut: '16-dim', interKey: 'mlpOut', wide: true, lines: [138, 140], desc: 'Two linear layers with squared ReLU: expand to 64-dim, compress back' },
+  { id: 'residual2', label: '+ Residual', color: '#64748b', dimOut: '16-dim', interKey: 'postResidual2', lines: [141, 141], desc: 'Add MLP input back for a second residual connection' },
+  { id: 'lm-head', label: 'LM Head', color: '#22c55e', dimOut: '27 logits', interKey: 'logits', lines: [143, 143], desc: 'Project 16-dim hidden state to 27 logits, one per token' },
+  { id: 'softmax', label: 'Softmax', color: '#22c55e', dimOut: '27 probs', interKey: 'probs', lines: [97, 101], desc: 'Convert raw logits into a probability distribution' },
 ];
 
 // Detailed intermediate data labels (shown when a block is clicked)
@@ -41,7 +41,7 @@ const BLOCK_DETAILS = {
   ]},
   'residual2': { title: 'Residual Connection 2', keys: [{ key: 'postResidual2', label: 'x + x_residual', dim: 16 }] },
   'lm-head': { title: 'LM Head', keys: [{ key: 'logits', label: 'Linear → 27 logits', dim: 27 }] },
-  'softmax': { title: 'Softmax', keys: [] },
+  'softmax': { title: 'Softmax', keys: [{ key: 'probs', label: 'Probabilities', dim: 27 }] },
 };
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
@@ -385,18 +385,18 @@ function highlightPython(code) {
   });
 }
 
-// Render the source panel
-function renderSourcePanel() {
-  const panel = document.getElementById('source-code-panel');
+// Render full source into the collapsible panel
+function renderFullSource() {
+  const panel = document.getElementById('arch-full-source-code');
   const highlighted = highlightPython(MICROGPT_SOURCE);
   panel.innerHTML = highlighted.map(({ num, content }) =>
     `<div class="line" data-line="${num}"><span class="line-num">${num}</span><span class="line-content">${content}</span></div>`
   ).join('');
 }
 
-// Highlight specific line range in source and scroll to it
-function highlightSourceLines(startLine, endLine) {
-  const panel = document.getElementById('source-code-panel');
+// Highlight lines in the full source panel (when collapsible is open)
+function highlightFullSourceLines(startLine, endLine) {
+  const panel = document.getElementById('arch-full-source-code');
   const lines = panel.querySelectorAll('.line');
   lines.forEach(line => line.classList.remove('highlighted'));
 
@@ -408,6 +408,139 @@ function highlightSourceLines(startLine, endLine) {
   if (targetLine) {
     targetLine.scrollIntoView({ behavior: 'auto', block: 'center' });
   }
+}
+
+// Render a code snippet (extracted lines from MICROGPT_SOURCE) into the detail panel
+function renderCodeSnippet(startLine, endLine) {
+  const allLines = MICROGPT_SOURCE.split('\n');
+  const snippetLines = allLines.slice(startLine - 1, endLine);
+  const highlighted = snippetLines.map((line, i) => {
+    const num = startLine + i;
+    return { num, content: highlightLine(line) };
+  });
+  return `<div class="code-panel arch-code-snippet">${highlighted.map(({ num, content }) =>
+    `<div class="line"><span class="line-num">${num}</span><span class="line-content">${content}</span></div>`
+  ).join('')}</div>`;
+}
+
+// Render data bars for a vector of values (blue positive, orange negative)
+function renderDataBars(values, label) {
+  const maxAbs = Math.max(...values.map(Math.abs), 0.001);
+  const bars = values.map((v, i) => {
+    const heightPct = (Math.abs(v) / maxAbs) * 100;
+    const colorClass = v >= 0 ? 'positive' : 'negative';
+    return `<div class="arch-bar ${colorClass}" data-index="${i}" title="[${i}] ${v.toFixed(6)}" style="height:${heightPct}%"></div>`;
+  }).join('');
+  return `<div class="arch-data-section"><span class="arch-data-label">${escHtml(label)} [${values.length}]</span><div class="arch-data-bars">${bars}</div></div>`;
+}
+
+// Render probability bars for softmax output (horizontal, sorted, top 10)
+function renderProbBars(probs, vocab) {
+  const chars = vocab.chars;
+  const indexed = probs.map((p, i) => ({ p, i }));
+  indexed.sort((a, b) => b.p - a.p);
+  const top = indexed.slice(0, 10);
+  const maxP = top[0].p;
+
+  const rows = top.map(({ p, i }) => {
+    const label = i === vocab.bos ? 'BOS' : escHtml(chars[i]);
+    const widthPct = (p / maxP) * 100;
+    return `<div class="arch-prob-row">
+      <span class="arch-prob-token">${label}</span>
+      <div class="arch-prob-track"><div class="arch-prob-fill" style="width:${widthPct}%"></div></div>
+      <span class="arch-prob-value">${(p * 100).toFixed(1)}%</span>
+    </div>`;
+  }).join('');
+
+  return `<div class="arch-data-section"><span class="arch-data-label">Top 10 token probabilities</span><div class="arch-prob-bars">${rows}</div></div>`;
+}
+
+// Render the detail panel for the currently selected block
+function renderDetail(blockIndex, intermediates, vocab) {
+  const panel = document.getElementById('arch-detail-content');
+  if (blockIndex === null) {
+    panel.innerHTML = '<p class="arch-detail-welcome">Select a block to see its code and output, or step through with the arrows.</p>';
+    return;
+  }
+
+  const block = BLOCKS[blockIndex];
+  const details = BLOCK_DETAILS[block.id];
+  const html = [];
+
+  // Title
+  html.push(`<h3 class="arch-detail-title">${escHtml(details.title)}</h3>`);
+  // Description
+  html.push(`<p class="arch-detail-desc">${escHtml(block.desc)}</p>`);
+  // Code snippet
+  html.push(renderCodeSnippet(block.lines[0], block.lines[1]));
+
+  // Data visualization
+  if (intermediates) {
+    if (block.id === 'softmax') {
+      // Probability bars for softmax
+      const probs = intermediates.probs;
+      if (probs) {
+        html.push(renderProbBars(probs, vocab));
+      }
+    } else {
+      // Standard data bars for other blocks
+      for (const { key, label } of details.keys) {
+        const values = intermediates[key];
+        if (values) {
+          html.push(renderDataBars(values, label));
+        }
+      }
+    }
+  }
+
+  panel.innerHTML = html.join('');
+}
+
+// Render step dots navigation
+function renderStepDots(container, currentIndex) {
+  container.innerHTML = BLOCKS.map((block, i) => {
+    let stateClass = '';
+    if (currentIndex !== null) {
+      if (i === currentIndex) stateClass = 'current';
+      else if (i < currentIndex) stateClass = 'completed';
+      else stateClass = 'upcoming';
+    }
+    return `<button class="arch-dot ${stateClass}" data-index="${i}" aria-label="${block.label} (step ${i + 1} of ${BLOCKS.length})" title="${block.label}" style="--dot-color:${block.color}"></button>`;
+  }).join('');
+}
+
+// Update SVG block visual states
+function updateBlockStates(svg, currentIndex) {
+  svg.querySelectorAll('.arch-block').forEach((g, i) => {
+    const block = BLOCKS[i];
+    const rect = g.querySelector('rect');
+
+    g.classList.remove('current', 'completed', 'upcoming');
+    g.removeAttribute('aria-current');
+
+    if (currentIndex === null) {
+      // Neutral state
+      rect.setAttribute('fill', block.color + '20');
+      rect.setAttribute('stroke-width', '1.5');
+      g.style.opacity = '1';
+    } else if (i === currentIndex) {
+      g.classList.add('current');
+      g.setAttribute('aria-current', 'step');
+      rect.setAttribute('fill', block.color + '50');
+      rect.setAttribute('stroke-width', '3');
+      g.style.opacity = '1';
+    } else if (i < currentIndex) {
+      g.classList.add('completed');
+      rect.setAttribute('fill', block.color + '35');
+      rect.setAttribute('stroke-width', '1.5');
+      g.style.opacity = '1';
+    } else {
+      g.classList.add('upcoming');
+      rect.setAttribute('fill', block.color + '15');
+      rect.setAttribute('stroke-width', '1.5');
+      g.style.opacity = '0.5';
+    }
+  });
 }
 
 // Create architecture SVG
@@ -454,6 +587,7 @@ function createSVG() {
     const g = document.createElementNS(SVG_NS, 'g');
     g.setAttribute('class', 'arch-block');
     g.setAttribute('data-block', block.id);
+    g.setAttribute('data-index', i);
     g.setAttribute('role', 'button');
     g.setAttribute('tabindex', '0');
     g.setAttribute('aria-label', `${block.label}: ${block.dimOut}`);
@@ -496,74 +630,14 @@ function createSVG() {
   return svg;
 }
 
-// Render a vector as colored cells
-function renderVectorDisplay(values, label) {
-  const maxAbs = Math.max(...values.map(Math.abs), 0.001);
-  const html = [`<div class="vector-label">${label} [${values.length}]</div><div class="values-grid">`];
-  for (const v of values) {
-    const norm = v / maxAbs;
-    const r = norm > 0 ? Math.round(59 + norm * 196) : Math.round(59);
-    const g = norm > 0 ? Math.round(130 + norm * 125) : Math.round(68);
-    const b = norm > 0 ? Math.round(246) : Math.round(68 + Math.abs(norm) * 178);
-    const bg = `rgba(${r}, ${g}, ${b}, ${Math.abs(norm) * 0.4 + 0.1})`;
-    html.push(`<div class="val-cell" style="background:${bg}" title="${v.toFixed(6)}">${v.toFixed(3)}</div>`);
-  }
-  html.push('</div>');
-  return html.join('');
-}
-
-// Show data for a specific block
-function showBlockData(blockId, intermediates) {
-  const card = document.getElementById('arch-data-card');
-  const title = document.getElementById('arch-data-title');
-  const content = document.getElementById('arch-data-content');
-  const details = BLOCK_DETAILS[blockId];
-
-  if (!details || !intermediates) {
-    card.hidden = true;
-    return;
-  }
-
-  title.textContent = details.title;
-  const html = [];
-
-  for (const { key, label } of details.keys) {
-    const values = intermediates[key];
-    if (values) {
-      html.push(`<div class="data-viewer" style="margin-bottom:0.5rem">${renderVectorDisplay(values, label)}</div>`);
-    }
-  }
-
-  // Show attention logits for attention block
-  if (blockId === 'attention' && intermediates.attnLogits) {
-    html.push('<div class="data-viewer" style="margin-bottom:0.5rem">');
-    html.push('<h4>Attention logits (per head, pre-softmax)</h4>');
-    intermediates.attnLogits.forEach((headLogits, h) => {
-      html.push(`<div class="vector-label">Head ${h} [${headLogits.length}]</div>`);
-      html.push('<div class="values-grid">');
-      for (const v of headLogits) {
-        html.push(`<div class="val-cell" title="${v.toFixed(6)}">${v.toFixed(3)}</div>`);
-      }
-      html.push('</div>');
-    });
-    html.push('</div>');
-  }
-
-  if (html.length === 0) {
-    html.push('<p style="color:var(--text-dim);font-size:0.85rem">No intermediate data for this block.</p>');
-  }
-
-  content.innerHTML = html.join('');
-  card.hidden = false;
-}
-
-const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
-
 export function initArchitecture({ vocab }) {
   const container = document.getElementById('arch-svg-container');
   const tokenSelect = document.getElementById('arch-token-select');
   const posSelect = document.getElementById('arch-pos-select');
   const btnRun = document.getElementById('btn-run-forward');
+  const dotsContainer = document.getElementById('arch-step-dots');
+  const btnBack = document.getElementById('arch-btn-back');
+  const btnNext = document.getElementById('arch-btn-next');
 
   // Populate token selector
   const chars = vocab.chars;
@@ -575,13 +649,12 @@ export function initArchitecture({ vocab }) {
   container.innerHTML = '';
   container.appendChild(svg);
 
-  // Render source panel
-  renderSourcePanel();
+  // Render full source (collapsible, initially collapsed)
+  renderFullSource();
 
   // State
   let currentIntermediates = null;
-  let activeBlockId = null;
-  let animating = false;
+  let currentIndex = null; // null = no block selected
 
   // Compute a forward pass and return intermediates
   function computeForwardPass() {
@@ -591,129 +664,91 @@ export function initArchitecture({ vocab }) {
     const values = Array.from({ length: N_LAYER }, () => []);
     const result = gptForward(tokenId, posId, keys, values, { intermediates: true });
     currentIntermediates = result.intermediates;
+    // Compute softmax probabilities
+    currentIntermediates.probs = Array.from(softmax(result.logits));
   }
 
-  // Select a block: highlight SVG, show data, scroll code
-  function selectBlock(blockId) {
-    activeBlockId = blockId;
+  // Select a block by index
+  function selectBlock(index) {
+    currentIndex = index;
 
-    // SVG highlight
-    svg.querySelectorAll('.arch-block').forEach(g => {
-      g.classList.toggle('active', g.getAttribute('data-block') === blockId);
-    });
+    // Update SVG visual states
+    updateBlockStates(svg, currentIndex);
 
-    // Data panel
-    showBlockData(blockId, currentIntermediates);
+    // Update step dots
+    renderStepDots(dotsContainer, currentIndex);
+    attachDotListeners();
 
-    // Source line highlight
-    const block = BLOCKS.find(b => b.id === blockId);
-    if (block && block.lines) {
-      highlightSourceLines(block.lines[0], block.lines[1]);
-    }
-  }
+    // Update button states
+    btnBack.disabled = currentIndex === null || currentIndex === 0;
+    btnNext.disabled = currentIndex === BLOCKS.length - 1;
 
-  // Mark all blocks as lit (have data)
-  function lightAllBlocks() {
-    svg.querySelectorAll('.arch-block').forEach(g => {
-      const blockId = g.getAttribute('data-block');
-      const block = BLOCKS.find(b => b.id === blockId);
-      g.classList.remove('dimmed', 'stepping');
-      if (block && block.interKey && currentIntermediates[block.interKey]) {
-        g.classList.add('lit');
-        g.querySelector('rect').style.fill = block.color + '40';
-      }
-    });
-  }
+    // Render detail panel
+    renderDetail(currentIndex, currentIntermediates, vocab);
 
-  // Instant forward pass — used on init and input change
-  function runForwardPassInstant() {
-    computeForwardPass();
-    lightAllBlocks();
-    selectBlock(activeBlockId || 'lm-head');
-  }
-
-  const stepLabel = document.getElementById('arch-step-label');
-
-  // Animated forward pass — step through blocks one by one
-  async function runForwardPassAnimated() {
-    if (animating) return;
-    animating = true;
-    btnRun.disabled = true;
-
-    computeForwardPass();
-
-    const stepDelay = prefersReducedMotion.matches ? 0 : 500;
-
-    // Dim all blocks
-    svg.querySelectorAll('.arch-block').forEach(g => {
-      g.classList.remove('active', 'lit', 'stepping');
-      g.classList.add('dimmed');
-      const blockId = g.getAttribute('data-block');
-      const block = BLOCKS.find(b => b.id === blockId);
-      if (block) g.querySelector('rect').style.fill = block.color + '20';
-    });
-
-    // Step through each block
-    for (let i = 0; i < BLOCKS.length; i++) {
-      const block = BLOCKS[i];
-      const g = svg.querySelector(`[data-block="${block.id}"]`);
-      const rect = g.querySelector('rect');
-
-      // Show step label
-      stepLabel.hidden = false;
-      stepLabel.innerHTML = `<strong>${block.label}</strong> (${i + 1}/${BLOCKS.length})`;
-
-      // Highlight stepping block
-      g.classList.remove('dimmed');
-      g.classList.add('stepping');
-      rect.style.fill = block.color + '50';
-      rect.style.stroke = block.color;
-
-      // Scroll SVG to keep stepping block visible
-      g.scrollIntoView({ behavior: 'auto', block: 'nearest' });
-
-      // Select it (show data + scroll code)
-      selectBlock(block.id);
-      // Remove .active since stepping takes visual precedence
-      g.classList.remove('active');
-      g.classList.add('stepping');
-
-      if (stepDelay > 0) {
-        await new Promise(r => setTimeout(r, stepDelay));
-      }
-
-      // Transition from stepping to lit
-      g.classList.remove('stepping');
-      g.classList.add('lit');
-      if (block.interKey && currentIntermediates[block.interKey]) {
-        rect.style.fill = block.color + '40';
-      } else {
-        rect.style.fill = block.color + '20';
+    // Update full source highlighting (if collapsible is open)
+    if (currentIndex !== null) {
+      const block = BLOCKS[currentIndex];
+      const fullSourceContent = document.getElementById('arch-full-source-content');
+      if (fullSourceContent.classList.contains('open')) {
+        highlightFullSourceLines(block.lines[0], block.lines[1]);
       }
     }
 
-    // Final state: select lm-head, hide step label
-    stepLabel.hidden = true;
-    selectBlock('lm-head');
-    animating = false;
-    btnRun.disabled = false;
+    // Scroll the current SVG block into view
+    if (currentIndex !== null) {
+      const g = svg.querySelector(`[data-index="${currentIndex}"]`);
+      if (g) g.scrollIntoView({ behavior: 'auto', block: 'nearest' });
+    }
   }
 
-  btnRun.addEventListener('click', runForwardPassAnimated);
+  function attachDotListeners() {
+    dotsContainer.querySelectorAll('.arch-dot').forEach(dot => {
+      dot.addEventListener('click', () => {
+        selectBlock(parseInt(dot.dataset.index));
+      });
+    });
+  }
+
+  // Navigation
+  btnBack.addEventListener('click', () => {
+    if (currentIndex !== null && currentIndex > 0) {
+      selectBlock(currentIndex - 1);
+    }
+  });
+
+  btnNext.addEventListener('click', () => {
+    if (currentIndex === null) {
+      selectBlock(0);
+    } else if (currentIndex < BLOCKS.length - 1) {
+      selectBlock(currentIndex + 1);
+    }
+  });
+
+  // Run Forward Pass: recompute + restart at block 0
+  btnRun.addEventListener('click', () => {
+    computeForwardPass();
+    selectBlock(0);
+  });
 
   // Auto-update on input change
   tokenSelect.addEventListener('change', () => {
-    if (!animating) runForwardPassInstant();
+    computeForwardPass();
+    if (currentIndex !== null) {
+      renderDetail(currentIndex, currentIntermediates, vocab);
+    }
   });
   posSelect.addEventListener('change', () => {
-    if (!animating) runForwardPassInstant();
+    computeForwardPass();
+    if (currentIndex !== null) {
+      renderDetail(currentIndex, currentIntermediates, vocab);
+    }
   });
 
-  // Block click handlers
+  // Block click handlers on SVG
   svg.querySelectorAll('.arch-block').forEach(g => {
     const handler = () => {
-      if (animating) return;
-      selectBlock(g.getAttribute('data-block'));
+      selectBlock(parseInt(g.dataset.index));
     };
 
     g.addEventListener('click', handler);
@@ -722,7 +757,31 @@ export function initArchitecture({ vocab }) {
     });
   });
 
+  // Full source collapsible toggle
+  const fullSourceToggle = document.getElementById('arch-full-source-toggle');
+  const fullSourceContent = document.getElementById('arch-full-source-content');
+  function toggleFullSource() {
+    const isOpen = fullSourceContent.classList.toggle('open');
+    fullSourceToggle.setAttribute('aria-expanded', isOpen);
+    // If opening and a block is selected, highlight its lines
+    if (isOpen && currentIndex !== null) {
+      const block = BLOCKS[currentIndex];
+      highlightFullSourceLines(block.lines[0], block.lines[1]);
+    }
+  }
+  fullSourceToggle.addEventListener('click', toggleFullSource);
+  fullSourceToggle.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleFullSource(); }
+  });
+
   // Run initial forward pass with BOS at position 0
   tokenSelect.value = String(vocab.bos);
-  runForwardPassInstant();
+  computeForwardPass();
+
+  // Start with no block selected (welcome state)
+  renderStepDots(dotsContainer, null);
+  attachDotListeners();
+  btnBack.disabled = true;
+  btnNext.disabled = false;
+  renderDetail(null, null, vocab);
 }
