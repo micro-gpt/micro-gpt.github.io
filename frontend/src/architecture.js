@@ -47,6 +47,7 @@ const BLOCK_DETAILS = {
 };
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
+const HEAD_COLORS = ['var(--accent-blue)', 'var(--accent-purple)', 'var(--accent-green)', 'var(--accent-cyan)'];
 
 // --- Full microgpt.py source (embedded) ---
 const MICROGPT_SOURCE = `"""
@@ -457,39 +458,58 @@ function renderProbBars(probs, vocab) {
   return `<div class="arch-data-section"><span class="arch-data-label">Top 10 token probabilities</span><div class="arch-prob-bars">${rows}</div></div>`;
 }
 
+// Render attention weight summary (per-head bars)
+function renderAttnSummary(attnWeights, posId) {
+  if (!attnWeights || attnWeights.length === 0) return '';
+  const rows = attnWeights.map((weights, h) => {
+    const segments = weights.map((w, p) => {
+      const pct = (w * 100);
+      const label = pct >= 10 ? `<span class="arch-attn-pct">${Math.round(pct)}%</span>` : '';
+      return `<div class="arch-attn-weight" style="flex:${Math.max(w, 0.02)}" title="pos ${p}: ${pct.toFixed(1)}%"><div class="arch-attn-bar" style="background:${HEAD_COLORS[h]};opacity:${0.3 + w * 0.7}"></div>${label}</div>`;
+    }).join('');
+    return `<div class="arch-attn-row"><span class="arch-attn-head" style="color:${HEAD_COLORS[h]}">H${h + 1}</span><div class="arch-attn-weights">${segments}</div></div>`;
+  }).join('');
+  return `<div class="arch-data-section"><span class="arch-data-label">Attention weights per head (positions 0–${posId})</span>${rows}</div>`;
+}
+
 // Render all 11 narrative blocks into the narrative container
-function renderNarrativeBlocks(intermediates, vocab) {
+function renderNarrativeBlocks(intermediates, vocab, attnWeights) {
   const container = document.getElementById('arch-narrative-container');
   container.innerHTML = BLOCKS.map((block, i) => {
     const html = [];
     html.push(`<h3 class="arch-detail-title">${escHtml(t(block.id + '.title'))}</h3>`);
     html.push(`<p class="arch-detail-desc">${escHtml(t(block.id + '.desc'))}</p>`);
     html.push(renderCodeSnippet(block.lines[0], block.lines[1]));
-    html.push(`<div class="arch-narrative-data">${renderBlockData(i, intermediates, vocab)}</div>`);
+    html.push(`<div class="arch-narrative-data">${renderBlockData(i, intermediates, vocab, attnWeights)}</div>`);
     return `<div class="arch-narrative" data-block-index="${i}"><div class="card" style="--block-color: ${block.color}">${html.join('')}</div></div>`;
   }).join('');
 }
 
 // Render data visualization HTML for a single block
-function renderBlockData(blockIndex, intermediates, vocab) {
+function renderBlockData(blockIndex, intermediates, vocab, attnWeights) {
   if (!intermediates) return '';
   const block = BLOCKS[blockIndex];
   const details = BLOCK_DETAILS[block.id];
   if (block.id === 'softmax') {
     return intermediates.probs ? renderProbBars(intermediates.probs, vocab) : '';
   }
-  return details.keys.map(({ key, label }) => {
+  let html = details.keys.map(({ key, label }) => {
     const values = intermediates[key];
     return values ? renderDataBars(values, label) : '';
   }).join('');
+  if (block.id === 'attention' && attnWeights) {
+    const posId = parseInt(document.getElementById('arch-pos-select').value);
+    html += renderAttnSummary(attnWeights, posId);
+  }
+  return html;
 }
 
 // Update only the data sections within narrative blocks (after forward pass recompute)
-function updateNarrativeData(intermediates, vocab) {
+function updateNarrativeData(intermediates, vocab, attnWeights) {
   const container = document.getElementById('arch-narrative-container');
   container.querySelectorAll('.arch-narrative').forEach((el, i) => {
     const dataEl = el.querySelector('.arch-narrative-data');
-    if (dataEl) dataEl.innerHTML = renderBlockData(i, intermediates, vocab);
+    if (dataEl) dataEl.innerHTML = renderBlockData(i, intermediates, vocab, attnWeights);
   });
 }
 
@@ -652,6 +672,7 @@ export function initArchitecture({ vocab }) {
 
   // State
   let currentIntermediates = null;
+  let currentAttnWeights = null;
   let currentIndex = 0;
 
   // Compute a forward pass and return intermediates
@@ -663,6 +684,7 @@ export function initArchitecture({ vocab }) {
     const result = gptForward(tokenId, posId, keys, values, { intermediates: true });
     currentIntermediates = result.intermediates;
     currentIntermediates.probs = Array.from(softmax(result.logits));
+    currentAttnWeights = result.attentionWeights;
   }
 
   // Highlight a block by index (updates SVG, dots, source, active narrative)
@@ -721,7 +743,7 @@ export function initArchitecture({ vocab }) {
   // Run Forward Pass: recompute + update all narrative data with visual feedback
   btnRun.addEventListener('click', () => {
     computeForwardPass();
-    updateNarrativeData(currentIntermediates, vocab);
+    updateNarrativeData(currentIntermediates, vocab, currentAttnWeights);
 
     // Flash data sections
     narrativeContainer.querySelectorAll('.arch-narrative-data').forEach(el => {
@@ -743,16 +765,25 @@ export function initArchitecture({ vocab }) {
   // Flag to prevent self-triggering when architecture's own selects call set()
   let externalUpdate = false;
 
-  // Auto-update on input change
+  // Context indicator element
+  const genContext = document.getElementById('arch-gen-context');
+
+  // Auto-update on input change (clear gen context on manual changes)
   tokenSelect.addEventListener('change', () => {
-    if (!externalUpdate) set('token', parseInt(tokenSelect.value));
+    if (!externalUpdate) {
+      set('token', parseInt(tokenSelect.value));
+      genContext.hidden = true;
+    }
     computeForwardPass();
-    updateNarrativeData(currentIntermediates, vocab);
+    updateNarrativeData(currentIntermediates, vocab, currentAttnWeights);
   });
   posSelect.addEventListener('change', () => {
-    if (!externalUpdate) set('position', parseInt(posSelect.value));
+    if (!externalUpdate) {
+      set('position', parseInt(posSelect.value));
+      genContext.hidden = true;
+    }
     computeForwardPass();
-    updateNarrativeData(currentIntermediates, vocab);
+    updateNarrativeData(currentIntermediates, vocab, currentAttnWeights);
   });
 
   // SVG block click → scroll to narrative
@@ -810,7 +841,7 @@ export function initArchitecture({ vocab }) {
   computeForwardPass();
 
   // Render all narrative blocks with data
-  renderNarrativeBlocks(currentIntermediates, vocab);
+  renderNarrativeBlocks(currentIntermediates, vocab, currentAttnWeights);
 
   // Set up scroll observer — highlights block when it enters top 40% of viewport
   let scrollObserver = null;
@@ -835,9 +866,36 @@ export function initArchitecture({ vocab }) {
       const titleEl = g.querySelector('title');
       if (titleEl) titleEl.textContent = t(g.dataset.block + '.tooltip');
     });
-    renderNarrativeBlocks(currentIntermediates, vocab);
+    renderNarrativeBlocks(currentIntermediates, vocab, currentAttnWeights);
     setupScrollObserver();
     highlightBlock(currentIndex);
+  }));
+
+  // Forward pass replay animation (triggered by genStep)
+  let animating = false;
+
+  async function animateForwardPass() {
+    if (animating) return;
+    animating = true;
+    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const stepDelay = reduceMotion ? 0 : 120;
+
+    for (let i = 0; i < BLOCKS.length; i++) {
+      highlightBlock(i);
+      const el = narrativeContainer.querySelector(`[data-block-index="${i}"]`);
+      if (el) el.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'nearest' });
+      if (stepDelay > 0 && i < BLOCKS.length - 1) {
+        await new Promise(r => setTimeout(r, stepDelay));
+      }
+    }
+    animating = false;
+  }
+
+  cleanupSubs.push(subscribe('genStep', (step) => {
+    if (!step) return;
+    genContext.textContent = `Viewing: token '${step.char}' at position ${step.pos}`;
+    genContext.hidden = false;
+    requestAnimationFrame(() => animateForwardPass());
   }));
 
   // Start at block 0

@@ -351,6 +351,7 @@ async function generate(vocab, temperature) {
       span.addEventListener('click', () => {
         set('token', parseInt(span.dataset.token));
         set('position', parseInt(span.dataset.pos));
+        set('genStep', { ts: Date.now(), char: span.textContent, pos: parseInt(span.dataset.pos) });
         document.getElementById('section-architecture').scrollIntoView({ behavior: 'smooth' });
       });
     });
