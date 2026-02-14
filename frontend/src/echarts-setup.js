@@ -3,26 +3,28 @@
  */
 
 import { use, init } from 'echarts/core';
-import { HeatmapChart, BarChart, ScatterChart, SankeyChart } from 'echarts/charts';
+import { HeatmapChart, BarChart, SankeyChart, ParallelChart } from 'echarts/charts';
 import {
   TooltipComponent,
   VisualMapComponent,
   GridComponent,
   DataZoomComponent,
   LegendComponent,
+  ParallelComponent,
 } from 'echarts/components';
 import { CanvasRenderer } from 'echarts/renderers';
 
 use([
   HeatmapChart,
   BarChart,
-  ScatterChart,
   SankeyChart,
+  ParallelChart,
   TooltipComponent,
   VisualMapComponent,
   GridComponent,
   DataZoomComponent,
   LegendComponent,
+  ParallelComponent,
   CanvasRenderer,
 ]);
 
