@@ -139,6 +139,14 @@ if (!prefersReducedMotion) {
   });
 }
 
+// Mini-nav overflow detection for gradient fade
+const navScroll = document.querySelector('.mini-nav-scroll');
+function checkNavOverflow() {
+  navScroll.classList.toggle('is-overflowing', navScroll.scrollWidth > navScroll.clientWidth);
+}
+checkNavOverflow();
+new ResizeObserver(checkNavOverflow).observe(navScroll);
+
 // Nav click handling
 navLinks.forEach(link => {
   link.addEventListener('click', (e) => {

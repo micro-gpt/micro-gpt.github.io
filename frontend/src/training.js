@@ -81,7 +81,7 @@ function renderWeightInspector(stateDict) {
     const label = t(tKey);
     return `<div class="weight-heatmap">
       <div class="heatmap-label">${label}</div>
-      <canvas data-weight="${key}" title="Click to inspect ${label}"></canvas>
+      <canvas data-weight="${key}" aria-label="${label} weight matrix"></canvas>
       <div class="dims">${dims}</div>
     </div>`;
   }).join('');

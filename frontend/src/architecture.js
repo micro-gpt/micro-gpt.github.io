@@ -898,6 +898,22 @@ export function initArchitecture({ vocab }) {
     requestAnimationFrame(() => animateForwardPass());
   }));
 
+  // Arrow key navigation for architecture blocks
+  function handleArrowKeys(e) {
+    if (get('activeSection') !== 'architecture') return;
+    const tag = document.activeElement?.tagName;
+    if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return;
+    if (e.key === 'ArrowLeft' && currentIndex > 0) {
+      e.preventDefault();
+      scrollToBlock(currentIndex - 1);
+    } else if (e.key === 'ArrowRight' && currentIndex < BLOCKS.length - 1) {
+      e.preventDefault();
+      scrollToBlock(currentIndex + 1);
+    }
+  }
+  document.addEventListener('keydown', handleArrowKeys);
+  cleanupSubs.push(() => document.removeEventListener('keydown', handleArrowKeys));
+
   // Start at block 0
   highlightBlock(0);
 }
