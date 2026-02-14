@@ -3,40 +3,39 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="theme-color" content="#0f172a">
+  <meta name="theme-color" content="#0B0F1A">
   <meta name="description" content="Interactive visualization of microGPT — a 199-line, dependency-free GPT implementation">
   <title>microGPT — Interactive Visualization</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧠</text></svg>">
   <style>
     :root {
-      --bg-primary: #0f172a;
-      --bg-secondary: #1e293b;
-      --bg-tertiary: #334155;
-      --bg-quaternary: #475569;
-      --text-primary: #f1f5f9;
-      --text-secondary: #cbd5e1;
-      --text-muted: #94a3b8;
-      --text-dim: #64748b;
-      --accent-blue: #3b82f6;
-      --accent-blue-light: #60a5fa;
-      --accent-purple: #8b5cf6;
-      --accent-purple-light: #a78bfa;
-      --accent-green: #22c55e;
-      --accent-green-light: #86efac;
-      --accent-cyan: #06b6d4;
-      --accent-orange: #f97316;
-      --accent-red: #ef4444;
-      --glass-bg: rgba(30, 41, 59, 0.8);
-      --glass-border: rgba(255, 255, 255, 0.08);
-      --glass-border-hover: rgba(255, 255, 255, 0.12);
+      --bg-primary: #0B0F1A;
+      --bg-secondary: #141926;
+      --bg-tertiary: #1E2433;
+      --bg-quaternary: #2A3140;
+      --text-primary: #E8ECF1;
+      --text-secondary: #A0AAB8;
+      --text-muted: #6B7585;
+      --text-dim: #4A5263;
+      --accent: #5B8DEF;
+      --accent-hover: #7BA4F5;
+      --accent-subtle: rgba(91, 141, 239, 0.12);
+      --accent-blue: #5B8DEF;
+      --accent-purple: #9B7AEA;
+      --accent-green: #4ADE80;
+      --accent-cyan: #22D3EE;
+      --accent-orange: #FB923C;
+      --accent-red: #F87171;
+      --glass-bg: rgba(20, 25, 38, 0.85);
+      --glass-border: rgba(255, 255, 255, 0.06);
+      --glass-border-hover: rgba(255, 255, 255, 0.10);
+      --border-subtle: rgba(255, 255, 255, 0.08);
       --radius-sm: 4px;
       --radius-md: 8px;
       --radius-lg: 12px;
       --radius-xl: 16px;
-      --shadow-card: 0 4px 20px rgba(0, 0, 0, 0.2);
-      --shadow-glow-blue: 0 0 20px rgba(59, 130, 246, 0.3);
-      --shadow-glow-purple: 0 0 20px rgba(139, 92, 246, 0.3);
-      --shadow-deep: 0 12px 40px rgba(0, 0, 0, 0.3);
+      --shadow-card: 0 2px 12px rgba(0, 0, 0, 0.25);
+      --shadow-deep: 0 8px 32px rgba(0, 0, 0, 0.35);
       --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
       --font-mono: 'Fira Code', 'Monaco', 'Cascadia Code', 'Consolas', monospace;
       --ease-out: cubic-bezier(0.4, 0, 0.2, 1);
@@ -49,10 +48,6 @@
     body {
       font-family: var(--font-sans);
       background-color: var(--bg-primary);
-      background-image:
-        radial-gradient(at 20% 30%, rgba(59, 130, 246, 0.08) 0px, transparent 50%),
-        radial-gradient(at 80% 20%, rgba(139, 92, 246, 0.06) 0px, transparent 50%),
-        radial-gradient(at 40% 80%, rgba(6, 182, 212, 0.04) 0px, transparent 50%);
       color: var(--text-primary);
       line-height: 1.5;
       min-height: 100dvh;
@@ -65,7 +60,7 @@
     ::-webkit-scrollbar-thumb:hover { background: var(--text-dim); }
 
     *:focus-visible {
-      outline: 2px solid var(--accent-blue);
+      outline: 2px solid var(--accent);
       outline-offset: 2px;
     }
 
@@ -85,10 +80,7 @@
       font-size: 2rem;
       font-weight: 700;
       letter-spacing: -0.02em;
-      background: linear-gradient(135deg, var(--accent-blue), var(--accent-purple));
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      background-clip: text;
+      color: var(--text-primary);
       margin-bottom: 0.5rem;
     }
 
@@ -98,14 +90,14 @@
     }
 
     .header-link {
-      color: var(--accent-blue-light);
+      color: var(--accent-hover);
       text-decoration: none;
       border-bottom: 1px solid transparent;
       transition: border-color var(--transition-fast);
     }
 
     .header-link:hover {
-      border-bottom-color: var(--accent-blue-light);
+      border-bottom-color: var(--accent-hover);
     }
 
     .footer {
@@ -208,8 +200,7 @@
 
     .mini-nav-link.active {
       color: var(--text-primary);
-      background: linear-gradient(135deg, rgba(59, 130, 246, 0.2), rgba(139, 92, 246, 0.2));
-      box-shadow: 0 2px 10px rgba(59, 130, 246, 0.15);
+      background: var(--accent-subtle);
     }
 
     /* Scroll Sections */
@@ -268,7 +259,7 @@
       gap: 0.5rem;
       padding: 0.625rem 1.25rem;
       min-height: 44px;
-      background: linear-gradient(135deg, var(--accent-blue), var(--accent-purple));
+      background: var(--accent);
       color: white;
       border: none;
       border-radius: var(--radius-md);
@@ -277,12 +268,12 @@
       font-weight: 600;
       cursor: pointer;
       transition: all var(--transition-fast);
-      box-shadow: 0 2px 10px rgba(59, 130, 246, 0.25);
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.08);
     }
 
     .btn:hover {
-      transform: translateY(-1px);
-      box-shadow: 0 4px 16px rgba(59, 130, 246, 0.35);
+      background: var(--accent-hover);
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
     }
 
     .btn:active {
@@ -307,7 +298,7 @@
 
     .btn-sm {
       padding: 0.375rem 0.75rem;
-      min-height: 36px;
+      min-height: 44px;
       font-size: 0.8rem;
     }
 
@@ -322,7 +313,7 @@
 
     .toggle-group button {
       padding: 0.375rem 0.75rem;
-      min-height: 36px;
+      min-height: 44px;
       background: none;
       border: none;
       border-radius: calc(var(--radius-md) - 2px);
@@ -339,7 +330,7 @@
     }
 
     .toggle-group button[aria-pressed="true"] {
-      background: var(--accent-blue);
+      background: var(--accent);
       color: white;
       box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
     }
@@ -360,7 +351,7 @@
       width: 20px;
       height: 20px;
       border-radius: 50%;
-      background: var(--accent-blue);
+      background: var(--accent);
       box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
       transition: transform 0.1s ease;
     }
@@ -370,7 +361,7 @@
       height: 20px;
       border: none;
       border-radius: 50%;
-      background: var(--accent-blue);
+      background: var(--accent);
       box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
     }
 
@@ -381,7 +372,7 @@
     /* Select */
     select {
       padding: 0.5rem 2rem 0.5rem 0.75rem;
-      min-height: 36px;
+      min-height: 44px;
       background: var(--bg-tertiary);
       color: var(--text-primary);
       border: 1px solid var(--glass-border);
@@ -391,7 +382,7 @@
       cursor: pointer;
       -webkit-appearance: none;
       appearance: none;
-      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%2394a3b8' fill='none' stroke-width='1.5'/%3E%3C/svg%3E");
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%236B7585' fill='none' stroke-width='1.5'/%3E%3C/svg%3E");
       background-repeat: no-repeat;
       background-position: right 0.75rem center;
     }
@@ -419,8 +410,8 @@
     }
 
     .code-panel .line.highlighted {
-      background: rgba(59, 130, 246, 0.15);
-      border-left: 2px solid var(--accent-blue);
+      background: var(--accent-subtle);
+      border-left: 2px solid var(--accent);
     }
 
     .code-panel .line-num {
@@ -435,8 +426,8 @@
       white-space: pre;
     }
 
-    .code-panel .keyword { color: var(--accent-purple-light); }
-    .code-panel .function { color: var(--accent-blue-light); }
+    .code-panel .keyword { color: var(--accent-purple); }
+    .code-panel .function { color: var(--accent-hover); }
     .code-panel .string { color: var(--accent-green); }
     .code-panel .comment { color: var(--text-dim); }
     .code-panel .number { color: var(--accent-orange); }
@@ -445,7 +436,7 @@
     /* Architecture split layout */
     .arch-split {
       display: grid;
-      grid-template-columns: 1fr 1fr;
+      grid-template-columns: minmax(280px, 420px) 1fr;
       gap: 1.5rem;
     }
 
@@ -474,8 +465,8 @@
     }
 
     .arch-dot {
-      width: 12px;
-      height: 12px;
+      width: 16px;
+      height: 16px;
       border-radius: 50%;
       border: 2px solid var(--dot-color);
       background: transparent;
@@ -490,7 +481,6 @@
 
     .arch-dot.current {
       background: var(--dot-color);
-      box-shadow: 0 0 6px var(--dot-color);
     }
 
     .arch-dot.completed {
@@ -508,12 +498,12 @@
     }
 
     .arch-narrative .card {
-      border-left: 3px solid var(--block-color);
+      border-top: 2px solid var(--block-color);
     }
 
     .arch-narrative.active .card {
       border-color: var(--glass-border-hover);
-      border-left: 3px solid var(--block-color);
+      border-top: 2px solid var(--block-color);
     }
 
     .arch-detail-title {
@@ -544,7 +534,7 @@
     .arch-data-label {
       display: block;
       font-family: var(--font-mono);
-      font-size: 0.7rem;
+      font-size: 0.75rem;
       color: var(--text-dim);
       margin-bottom: 0.375rem;
     }
@@ -568,7 +558,7 @@
     }
 
     .arch-bar.positive {
-      background: var(--accent-blue);
+      background: var(--accent);
     }
 
     .arch-bar.negative {
@@ -612,14 +602,14 @@
 
     .arch-prob-fill {
       height: 100%;
-      background: linear-gradient(90deg, var(--accent-blue), var(--accent-purple));
+      background: var(--accent);
       border-radius: 2px;
       transition: width var(--transition-fast);
     }
 
     .arch-prob-value {
       font-family: var(--font-mono);
-      font-size: 0.7rem;
+      font-size: 0.75rem;
       color: var(--text-dim);
       width: 3.5rem;
       text-align: right;
@@ -718,7 +708,7 @@
       grid-template-columns: repeat(auto-fill, minmax(52px, 1fr));
       gap: 2px;
       font-family: var(--font-mono);
-      font-size: 0.65rem;
+      font-size: 0.7rem;
       color: var(--text-muted);
     }
 
@@ -762,7 +752,7 @@
     .slider-row .value {
       font-family: var(--font-mono);
       font-size: 0.85rem;
-      color: var(--accent-blue-light);
+      color: var(--accent-hover);
       min-width: 60px;
       text-align: right;
       font-variant-numeric: tabular-nums;
@@ -786,7 +776,7 @@
 
     .progress-bar-fill {
       height: 100%;
-      background: linear-gradient(90deg, var(--accent-blue), var(--accent-purple));
+      background: var(--accent);
       border-radius: 3px;
       transition: width 0.1s linear;
       width: 0%;
@@ -816,8 +806,7 @@
     }
 
     .checkpoint-card.active {
-      border-color: var(--accent-blue);
-      box-shadow: var(--shadow-glow-blue);
+      border-color: var(--accent);
     }
 
     .checkpoint-card .step-label {
@@ -865,7 +854,7 @@
 
     .weight-heatmap .dims {
       font-family: var(--font-mono);
-      font-size: 0.7rem;
+      font-size: 0.75rem;
       color: var(--text-dim);
       margin-top: 0.25rem;
     }
@@ -909,7 +898,7 @@
       display: inline-block;
       width: 2px;
       height: 1.4em;
-      background: var(--accent-blue);
+      background: var(--accent);
       animation: blink 1s step-end infinite;
     }
 
@@ -926,7 +915,7 @@
 
     .attn-head-selector[data-head="0"][aria-pressed="true"],
     .attn-head-selector button[data-head="0"][aria-pressed="true"] {
-      background: var(--accent-blue);
+      background: var(--accent);
     }
 
     .attn-head-selector button[data-head="1"][aria-pressed="true"] {
@@ -973,20 +962,18 @@
     }
 
     .attn-token.selected {
-      background: rgba(59, 130, 246, 0.2);
-      border-color: var(--accent-blue);
-      color: var(--accent-blue-light);
-      box-shadow: 0 0 8px rgba(59, 130, 246, 0.2);
+      background: var(--accent-subtle);
+      border-color: var(--accent);
+      color: var(--accent-hover);
     }
 
     .attn-token.current {
       border-color: var(--accent-purple);
-      box-shadow: 0 0 8px rgba(139, 92, 246, 0.15);
     }
 
     .attn-token.target {
-      background: rgba(59, 130, 246, 0.1);
-      border-color: var(--accent-blue);
+      background: var(--accent-subtle);
+      border-color: var(--accent);
     }
 
     .attn-arcs-svg {
@@ -1003,7 +990,7 @@
 
     .attn-arc-label {
       font-family: var(--font-mono);
-      font-size: 0.6rem;
+      font-size: 0.7rem;
       fill: var(--text-muted);
       pointer-events: none;
     }
@@ -1061,13 +1048,13 @@
 
     .prob-bar-row .bar-fill {
       height: 100%;
-      background: var(--accent-blue);
+      background: var(--accent);
       border-radius: 2px;
       transition: width var(--transition-fast);
     }
 
     .prob-bar-row .bar-fill.selected {
-      background: linear-gradient(90deg, var(--accent-blue), var(--accent-purple));
+      background: var(--accent);
     }
 
     .prob-bar-row .bar-fill.logit-bar {
@@ -1134,7 +1121,7 @@
       width: 16px;
       height: 16px;
       border: 2px solid var(--bg-quaternary);
-      border-top-color: var(--accent-blue);
+      border-top-color: var(--accent);
       border-radius: 50%;
       animation: spin 0.8s linear infinite;
     }

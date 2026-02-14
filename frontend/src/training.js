@@ -118,7 +118,7 @@ function createTrainingSVG(trainingLog) {
     line.setAttribute('y1', y);
     line.setAttribute('x2', w - padR);
     line.setAttribute('y2', y);
-    line.setAttribute('stroke', '#1e293b');
+    line.setAttribute('stroke', '#1E2433');
     line.setAttribute('stroke-width', '1');
     svg.appendChild(line);
 
@@ -126,7 +126,7 @@ function createTrainingSVG(trainingLog) {
     label.setAttribute('x', padL - 8);
     label.setAttribute('y', y + 4);
     label.setAttribute('text-anchor', 'end');
-    label.setAttribute('fill', '#64748b');
+    label.setAttribute('fill', '#6B7585');
     label.setAttribute('font-size', '11');
     label.setAttribute('font-family', '-apple-system, BlinkMacSystemFont, sans-serif');
     label.textContent = yVal.toFixed(1);
@@ -141,7 +141,7 @@ function createTrainingSVG(trainingLog) {
     label.setAttribute('x', x);
     label.setAttribute('y', h - 8);
     label.setAttribute('text-anchor', 'middle');
-    label.setAttribute('fill', '#64748b');
+    label.setAttribute('fill', '#6B7585');
     label.setAttribute('font-size', '11');
     label.setAttribute('font-family', '-apple-system, BlinkMacSystemFont, sans-serif');
     label.textContent = s;
@@ -154,7 +154,7 @@ function createTrainingSVG(trainingLog) {
   lossLabel.setAttribute('y', padT + plotH / 2);
   lossLabel.setAttribute('text-anchor', 'middle');
   lossLabel.setAttribute('transform', `rotate(-90, 14, ${padT + plotH / 2})`);
-  lossLabel.setAttribute('fill', '#3b82f6');
+  lossLabel.setAttribute('fill', '#5B8DEF');
   lossLabel.setAttribute('font-size', '12');
   lossLabel.setAttribute('font-weight', '600');
   lossLabel.setAttribute('font-family', '-apple-system, BlinkMacSystemFont, sans-serif');
@@ -166,7 +166,7 @@ function createTrainingSVG(trainingLog) {
   lrLabel.setAttribute('y', padT + plotH / 2);
   lrLabel.setAttribute('text-anchor', 'middle');
   lrLabel.setAttribute('transform', `rotate(90, ${w - 14}, ${padT + plotH / 2})`);
-  lrLabel.setAttribute('fill', '#8b5cf6');
+  lrLabel.setAttribute('fill', '#9B7AEA');
   lrLabel.setAttribute('font-size', '12');
   lrLabel.setAttribute('font-weight', '600');
   lrLabel.setAttribute('font-family', '-apple-system, BlinkMacSystemFont, sans-serif');
@@ -183,7 +183,7 @@ function createTrainingSVG(trainingLog) {
   const lrPath = document.createElementNS(SVG_NS, 'path');
   lrPath.setAttribute('d', lrPathD);
   lrPath.setAttribute('fill', 'none');
-  lrPath.setAttribute('stroke', '#8b5cf6');
+  lrPath.setAttribute('stroke', '#9B7AEA');
   lrPath.setAttribute('stroke-width', '1.5');
   lrPath.setAttribute('opacity', '0.5');
   svg.appendChild(lrPath);
@@ -198,7 +198,7 @@ function createTrainingSVG(trainingLog) {
   const lossPath = document.createElementNS(SVG_NS, 'path');
   lossPath.setAttribute('d', lossPathD);
   lossPath.setAttribute('fill', 'none');
-  lossPath.setAttribute('stroke', '#3b82f6');
+  lossPath.setAttribute('stroke', '#5B8DEF');
   lossPath.setAttribute('stroke-width', '2');
   lossPath.id = 'loss-path';
   svg.appendChild(lossPath);
@@ -219,7 +219,7 @@ function createTrainingSVG(trainingLog) {
   const scrubLine = document.createElementNS(SVG_NS, 'line');
   scrubLine.setAttribute('y1', padT);
   scrubLine.setAttribute('y2', padT + plotH);
-  scrubLine.setAttribute('stroke', '#f1f5f9');
+  scrubLine.setAttribute('stroke', '#E8ECF1');
   scrubLine.setAttribute('stroke-width', '1');
   scrubLine.setAttribute('opacity', '0.4');
   scrubLine.setAttribute('stroke-dasharray', '4 3');
@@ -228,8 +228,8 @@ function createTrainingSVG(trainingLog) {
 
   const scrubDot = document.createElementNS(SVG_NS, 'circle');
   scrubDot.setAttribute('r', '5');
-  scrubDot.setAttribute('fill', '#3b82f6');
-  scrubDot.setAttribute('stroke', '#f1f5f9');
+  scrubDot.setAttribute('fill', '#5B8DEF');
+  scrubDot.setAttribute('stroke', '#E8ECF1');
   scrubDot.setAttribute('stroke-width', '2');
   scrubDot.id = 'scrub-dot';
   svg.appendChild(scrubDot);
@@ -263,14 +263,14 @@ function createLiveChart() {
     line.setAttribute('y1', y);
     line.setAttribute('x2', w - padR);
     line.setAttribute('y2', y);
-    line.setAttribute('stroke', '#1e293b');
+    line.setAttribute('stroke', '#1E2433');
     svg.appendChild(line);
 
     const label = document.createElementNS(SVG_NS, 'text');
     label.setAttribute('x', padL - 8);
     label.setAttribute('y', y + 4);
     label.setAttribute('text-anchor', 'end');
-    label.setAttribute('fill', '#64748b');
+    label.setAttribute('fill', '#6B7585');
     label.setAttribute('font-size', '11');
     label.setAttribute('font-family', '-apple-system, BlinkMacSystemFont, sans-serif');
     label.textContent = yVal.toFixed(1);
@@ -283,7 +283,7 @@ function createLiveChart() {
     label.setAttribute('x', x);
     label.setAttribute('y', h - 8);
     label.setAttribute('text-anchor', 'middle');
-    label.setAttribute('fill', '#64748b');
+    label.setAttribute('fill', '#6B7585');
     label.setAttribute('font-size', '11');
     label.setAttribute('font-family', '-apple-system, BlinkMacSystemFont, sans-serif');
     label.textContent = s;
@@ -296,7 +296,7 @@ function createLiveChart() {
   lossLabel.setAttribute('y', padT + plotH / 2);
   lossLabel.setAttribute('text-anchor', 'middle');
   lossLabel.setAttribute('transform', `rotate(-90, 14, ${padT + plotH / 2})`);
-  lossLabel.setAttribute('fill', '#3b82f6');
+  lossLabel.setAttribute('fill', '#5B8DEF');
   lossLabel.setAttribute('font-size', '12');
   lossLabel.setAttribute('font-weight', '600');
   lossLabel.setAttribute('font-family', '-apple-system, BlinkMacSystemFont, sans-serif');
@@ -306,14 +306,14 @@ function createLiveChart() {
   // Loss path (starts empty, appended to as steps come in)
   const lossPath = document.createElementNS(SVG_NS, 'path');
   lossPath.setAttribute('fill', 'none');
-  lossPath.setAttribute('stroke', '#3b82f6');
+  lossPath.setAttribute('stroke', '#5B8DEF');
   lossPath.setAttribute('stroke-width', '2');
   svg.appendChild(lossPath);
 
   // LR path
   const lrPath = document.createElementNS(SVG_NS, 'path');
   lrPath.setAttribute('fill', 'none');
-  lrPath.setAttribute('stroke', '#8b5cf6');
+  lrPath.setAttribute('stroke', '#9B7AEA');
   lrPath.setAttribute('stroke-width', '1.5');
   lrPath.setAttribute('opacity', '0.5');
   svg.appendChild(lrPath);
@@ -323,7 +323,7 @@ function createLiveChart() {
   lrLabel.setAttribute('y', padT + plotH / 2);
   lrLabel.setAttribute('text-anchor', 'middle');
   lrLabel.setAttribute('transform', `rotate(90, ${w - 14}, ${padT + plotH / 2})`);
-  lrLabel.setAttribute('fill', '#8b5cf6');
+  lrLabel.setAttribute('fill', '#9B7AEA');
   lrLabel.setAttribute('font-size', '12');
   lrLabel.setAttribute('font-weight', '600');
   lrLabel.setAttribute('font-family', '-apple-system, BlinkMacSystemFont, sans-serif');

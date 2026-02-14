@@ -8,17 +8,17 @@ import { gptForward, softmax, N_LAYER } from './gpt.js';
 import { set } from './state.js';
 
 const BLOCKS = [
-  { id: 'tok-embed', label: 'Token Embed', color: '#3b82f6', dimOut: '16-dim', interKey: 'tokEmb', lines: [109, 109], desc: 'Look up the learned 16-dimensional vector for this token' },
-  { id: 'pos-embed', label: '+ Pos Embed', color: '#3b82f6', dimOut: '16-dim', interKey: 'combined', lines: [110, 111], desc: 'Add position information so the model knows token order' },
-  { id: 'rmsnorm0', label: 'RMSNorm', color: '#8b5cf6', dimOut: '16-dim', interKey: 'postNorm0', lines: [103, 106], desc: 'Normalize the vector magnitude to stabilize training' },
-  { id: 'rmsnorm1', label: 'RMSNorm', color: '#8b5cf6', dimOut: '16-dim', interKey: 'postNorm1', lines: [103, 106], desc: 'Normalize before attention to keep gradients stable' },
-  { id: 'attention', label: 'Multi-Head Attention', color: '#06b6d4', dimOut: '16-dim', interKey: 'attnOut', wide: true, lines: [118, 133], desc: '4 heads independently compute attention weights, then combine' },
-  { id: 'residual1', label: '+ Residual', color: '#64748b', dimOut: '16-dim', interKey: 'postResidual1', lines: [134, 134], desc: 'Add the original input back, preserving earlier information' },
-  { id: 'rmsnorm2', label: 'RMSNorm', color: '#8b5cf6', dimOut: '16-dim', interKey: 'postNorm2', lines: [103, 106], desc: 'Normalize before the MLP feed-forward layer' },
-  { id: 'mlp', label: 'MLP (ReLU²)', color: '#f97316', dimOut: '16-dim', interKey: 'mlpOut', wide: true, lines: [138, 140], desc: 'Two linear layers with squared ReLU: expand to 64-dim, compress back' },
-  { id: 'residual2', label: '+ Residual', color: '#64748b', dimOut: '16-dim', interKey: 'postResidual2', lines: [141, 141], desc: 'Add MLP input back for a second residual connection' },
-  { id: 'lm-head', label: 'LM Head', color: '#22c55e', dimOut: '27 logits', interKey: 'logits', lines: [143, 143], desc: 'Project 16-dim hidden state to 27 logits, one per token' },
-  { id: 'softmax', label: 'Softmax', color: '#22c55e', dimOut: '27 probs', interKey: 'probs', lines: [97, 101], desc: 'Convert raw logits into a probability distribution' },
+  { id: 'tok-embed', label: 'Token Embed', color: '#5B8DEF', dimOut: '16-dim', interKey: 'tokEmb', lines: [109, 109], desc: 'Look up the learned 16-dimensional vector for this token' },
+  { id: 'pos-embed', label: '+ Pos Embed', color: '#5B8DEF', dimOut: '16-dim', interKey: 'combined', lines: [110, 111], desc: 'Add position information so the model knows token order' },
+  { id: 'rmsnorm0', label: 'RMSNorm', color: '#9B7AEA', dimOut: '16-dim', interKey: 'postNorm0', lines: [103, 106], desc: 'Normalize the vector magnitude to stabilize training' },
+  { id: 'rmsnorm1', label: 'RMSNorm', color: '#9B7AEA', dimOut: '16-dim', interKey: 'postNorm1', lines: [103, 106], desc: 'Normalize before attention to keep gradients stable' },
+  { id: 'attention', label: 'Multi-Head Attention', color: '#22D3EE', dimOut: '16-dim', interKey: 'attnOut', wide: true, lines: [118, 133], desc: '4 heads independently compute attention weights, then combine' },
+  { id: 'residual1', label: '+ Residual', color: '#6B7585', dimOut: '16-dim', interKey: 'postResidual1', lines: [134, 134], desc: 'Add the original input back, preserving earlier information' },
+  { id: 'rmsnorm2', label: 'RMSNorm', color: '#9B7AEA', dimOut: '16-dim', interKey: 'postNorm2', lines: [103, 106], desc: 'Normalize before the MLP feed-forward layer' },
+  { id: 'mlp', label: 'MLP (ReLU²)', color: '#FB923C', dimOut: '16-dim', interKey: 'mlpOut', wide: true, lines: [138, 140], desc: 'Two linear layers with squared ReLU: expand to 64-dim, compress back' },
+  { id: 'residual2', label: '+ Residual', color: '#6B7585', dimOut: '16-dim', interKey: 'postResidual2', lines: [141, 141], desc: 'Add MLP input back for a second residual connection' },
+  { id: 'lm-head', label: 'LM Head', color: '#4ADE80', dimOut: '27 logits', interKey: 'logits', lines: [143, 143], desc: 'Project 16-dim hidden state to 27 logits, one per token' },
+  { id: 'softmax', label: 'Softmax', color: '#4ADE80', dimOut: '27 probs', interKey: 'probs', lines: [97, 101], desc: 'Convert raw logits into a probability distribution' },
 ];
 
 // Detailed intermediate data labels per block
@@ -564,7 +564,7 @@ function createSVG() {
       line.setAttribute('y1', y + blockH);
       line.setAttribute('x2', centerX);
       line.setAttribute('y2', y + blockH + gap);
-      line.setAttribute('stroke', '#334155');
+      line.setAttribute('stroke', '#2A3140');
       line.setAttribute('stroke-width', '2');
       line.setAttribute('stroke-dasharray', '4 3');
       svg.appendChild(line);
@@ -595,7 +595,7 @@ function createSVG() {
     text.setAttribute('y', y + blockH / 2 + 1);
     text.setAttribute('text-anchor', 'middle');
     text.setAttribute('dominant-baseline', 'middle');
-    text.setAttribute('fill', '#f1f5f9');
+    text.setAttribute('fill', '#E8ECF1');
     text.setAttribute('font-size', '13');
     text.setAttribute('font-weight', '600');
     text.setAttribute('font-family', '-apple-system, BlinkMacSystemFont, sans-serif');
