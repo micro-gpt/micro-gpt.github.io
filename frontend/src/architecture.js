@@ -7,6 +7,8 @@
 import { gptForward, softmax, N_LAYER, getStateDict } from './gpt.js';
 import { get, set, subscribe } from './state.js';
 import { t } from './content.js';
+import { initFlowChart, updateFlowChart } from './flow-chart.js';
+import { initEmbeddingChart } from './embedding-chart.js';
 
 const BLOCKS = [
   { id: 'tok-embed', label: 'Token Embed', color: '#5B8DEF', dimOut: '16-dim', interKey: 'tokEmb', lines: [109, 109] },
@@ -783,11 +785,11 @@ function updateBlockStates(svg, currentIndex) {
 
 // Create architecture SVG (blocks contain mini-viz, connectors support flow animation)
 function createSVG() {
-  const blockW = 200;
-  const blockWWide = 260;
-  const blockH = 70;
-  const gap = 16;
-  const padX = 60;
+  const blockW = 260;
+  const blockWWide = 320;
+  const blockH = 90;
+  const gap = 14;
+  const padX = 80;
   const padY = 30;
 
   const totalH = BLOCKS.length * (blockH + gap) - gap + padY * 2;
@@ -865,11 +867,11 @@ function createSVG() {
     // Label text (upper portion of block)
     const text = document.createElementNS(SVG_NS, 'text');
     text.setAttribute('x', centerX);
-    text.setAttribute('y', y + 20);
+    text.setAttribute('y', y + 22);
     text.setAttribute('text-anchor', 'middle');
     text.setAttribute('dominant-baseline', 'middle');
     text.setAttribute('fill', '#E8ECF1');
-    text.setAttribute('font-size', '13');
+    text.setAttribute('font-size', '14');
     text.setAttribute('font-weight', '600');
     text.setAttribute('font-family', '-apple-system, BlinkMacSystemFont, sans-serif');
     text.textContent = block.label;
@@ -878,7 +880,7 @@ function createSVG() {
     // Dimension label (aligned with block label)
     const dimText = document.createElementNS(SVG_NS, 'text');
     dimText.setAttribute('x', x + w + 12);
-    dimText.setAttribute('y', y + 20);
+    dimText.setAttribute('y', y + 22);
     dimText.setAttribute('dominant-baseline', 'middle');
     dimText.setAttribute('class', 'dim-label');
     dimText.textContent = block.dimOut;
@@ -887,7 +889,7 @@ function createSVG() {
     // Expand chevron (visible on hover)
     const chevron = document.createElementNS(SVG_NS, 'path');
     const chevX = x + w - 16;
-    const chevY = y + 20;
+    const chevY = y + 22;
     chevron.setAttribute('d', `M${chevX - 3},${chevY - 4} L${chevX + 2},${chevY} L${chevX - 3},${chevY + 4}`);
     chevron.setAttribute('stroke', '#E8ECF1');
     chevron.setAttribute('stroke-width', '1.5');
@@ -942,9 +944,9 @@ function updateMiniViz(svg, intermediates, vocab) {
     const bw = parseFloat(rect.getAttribute('width'));
 
     const vizX = bx + 12;
-    const vizY = by + 38;
+    const vizY = by + 42;
     const vizW = bw - 24;
-    const vizH = 22;
+    const vizH = 40;
 
     if (block.id === 'softmax') {
       renderMiniProbs(vizG, intermediates.probs, vocab, vizX, vizY, vizW, vizH);
@@ -983,14 +985,14 @@ function renderMiniProbs(g, probs, vocab, x, y, width, height) {
   if (!probs) return;
   const chars = vocab.chars;
   const indexed = probs.map((p, i) => ({ p, i })).sort((a, b) => b.p - a.p);
-  const top3 = indexed.slice(0, 3);
-  const maxP = top3[0].p;
+  const topN = indexed.slice(0, 5);
+  const maxP = topN[0].p;
 
-  const barH = Math.floor((height - 4) / 3);
+  const barH = Math.floor((height - (topN.length - 1) * 2) / topN.length);
   const labelW = 16;
   const barAreaW = width - labelW - 4;
 
-  top3.forEach(({ p, i: tokenIdx }, j) => {
+  topN.forEach(({ p, i: tokenIdx }, j) => {
     const barY = y + j * (barH + 2);
     const label = tokenIdx === vocab.bos ? '\u2297' : chars[tokenIdx];
 
@@ -1129,6 +1131,19 @@ function flashConnectors(svg) {
   });
 }
 
+// --- Flow animation helper ---
+function showDataFlow(svg, speed) {
+  const rm = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (rm) {
+    flashConnectors(svg);
+  } else {
+    const dotDuration = speed || 60;
+    for (let j = 0; j < BLOCKS.length - 1; j++) {
+      setTimeout(() => animateFlowDot(svg, j, dotDuration), j * (dotDuration * 0.8));
+    }
+  }
+}
+
 let cleanupSubs = [];
 
 export function initArchitecture({ vocab }) {
@@ -1141,7 +1156,6 @@ export function initArchitecture({ vocab }) {
   const tokenInput = document.getElementById('arch-token-input');
   const tokenSelect = document.getElementById('arch-token-select');
   const posSelect = document.getElementById('arch-pos-select');
-  const btnRun = document.getElementById('btn-run-forward');
   const dotsContainer = document.getElementById('arch-step-dots');
   const btnBack = document.getElementById('arch-btn-back');
   const btnNext = document.getElementById('arch-btn-next');
@@ -1245,38 +1259,25 @@ export function initArchitecture({ vocab }) {
     if (currentIndex < BLOCKS.length - 1) scrollToBlock(currentIndex + 1);
   });
 
-  // Run Forward Pass: recompute + update all narrative data with visual feedback
-  btnRun.addEventListener('click', () => {
-    computeForwardPass();
-    updateNarrativeData(currentIntermediates, vocab, currentAttnWeights);
-    updateMiniViz(svg, currentIntermediates, vocab);
+  // Always-live: recompute + visual feedback on every input change
+  let debounceTimer = null;
+  function triggerLiveUpdate() {
+    clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(() => {
+      computeForwardPass();
+      updateNarrativeData(currentIntermediates, vocab, currentAttnWeights);
+      updateMiniViz(svg, currentIntermediates, vocab);
+      showDataFlow(svg, 60);
+      updateFlowChart(currentIntermediates);
 
-    // Animate flow along connectors
-    const rm = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    if (rm) {
-      flashConnectors(svg);
-    } else {
-      for (let j = 0; j < BLOCKS.length - 1; j++) {
-        setTimeout(() => animateFlowDot(svg, j, 100), j * 80);
-      }
-    }
-
-    // Flash data sections
-    narrativeContainer.querySelectorAll('.arch-narrative-data').forEach(el => {
-      el.classList.remove('flash');
-      el.offsetWidth; // force reflow to re-trigger animation
-      el.classList.add('flash');
-    });
-
-    // Button feedback
-    const originalText = btnRun.textContent;
-    btnRun.textContent = 'Computed ✓';
-    btnRun.disabled = true;
-    setTimeout(() => {
-      btnRun.textContent = originalText;
-      btnRun.disabled = false;
-    }, 800);
-  });
+      // Flash data sections
+      narrativeContainer.querySelectorAll('.arch-narrative-data').forEach(el => {
+        el.classList.remove('flash');
+        el.offsetWidth;
+        el.classList.add('flash');
+      });
+    }, 50);
+  }
 
   // Flag to prevent self-triggering when architecture's own selects call set()
   let externalUpdate = false;
@@ -1284,7 +1285,7 @@ export function initArchitecture({ vocab }) {
   // Context indicator element
   const genContext = document.getElementById('arch-gen-context');
 
-  // Inline token typing
+  // Inline token typing — always-live
   tokenInput.addEventListener('input', () => {
     const ch = tokenInput.value;
     if (ch === '') return;
@@ -1294,20 +1295,17 @@ export function initArchitecture({ vocab }) {
       tokenSelect.value = String(idx);
       set('token', idx);
       genContext.hidden = true;
-      computeForwardPass();
-      updateNarrativeData(currentIntermediates, vocab, currentAttnWeights);
-      updateMiniViz(svg, currentIntermediates, vocab);
+      triggerLiveUpdate();
     } else {
       tokenInput.classList.add('invalid');
     }
   });
 
-  // Auto-update on input change (clear gen context on manual changes)
+  // Auto-update on input change — always-live
   tokenSelect.addEventListener('change', () => {
     if (!externalUpdate) {
       set('token', parseInt(tokenSelect.value));
       genContext.hidden = true;
-      // Sync text input
       const tokenId = parseInt(tokenSelect.value);
       if (tokenId === vocab.bos) {
         tokenInput.value = '';
@@ -1318,18 +1316,14 @@ export function initArchitecture({ vocab }) {
       }
       tokenInput.classList.remove('invalid');
     }
-    computeForwardPass();
-    updateNarrativeData(currentIntermediates, vocab, currentAttnWeights);
-    updateMiniViz(svg, currentIntermediates, vocab);
+    triggerLiveUpdate();
   });
   posSelect.addEventListener('change', () => {
     if (!externalUpdate) {
       set('position', parseInt(posSelect.value));
       genContext.hidden = true;
     }
-    computeForwardPass();
-    updateNarrativeData(currentIntermediates, vocab, currentAttnWeights);
-    updateMiniViz(svg, currentIntermediates, vocab);
+    triggerLiveUpdate();
   });
 
   // SVG block click → scroll to narrative
@@ -1526,6 +1520,18 @@ export function initArchitecture({ vocab }) {
   }
   document.addEventListener('keydown', handleArrowKeys);
   cleanupSubs.push(() => document.removeEventListener('keydown', handleArrowKeys));
+
+  // Initialize ECharts visualizations
+  const sankeyEl = document.getElementById('arch-sankey-chart');
+  if (sankeyEl) {
+    initFlowChart(sankeyEl);
+    updateFlowChart(currentIntermediates);
+  }
+
+  const embeddingEl = document.getElementById('arch-embedding-chart');
+  if (embeddingEl) {
+    initEmbeddingChart(embeddingEl, vocab);
+  }
 
   // Start at block 0
   highlightBlock(0);

@@ -22,7 +22,7 @@ async function loadData() {
 
 // Lazy section initializers
 const initialized = {};
-const sections = ['intro', 'architecture', 'training', 'generation'];
+const sections = ['intro', 'architecture', 'training', 'generation', 'data'];
 
 async function initSection(name) {
   if (initialized[name]) return;
@@ -74,6 +74,11 @@ async function initSection(name) {
     case 'generation': {
       const { initInference } = await import('./inference.js');
       initInference(d);
+      break;
+    }
+    case 'data': {
+      const { initDataExplorer } = await import('./data-explorer.js');
+      initDataExplorer();
       break;
     }
   }
@@ -158,7 +163,7 @@ navLinks.forEach(link => {
   });
 });
 
-// Keyboard: 1-4 jump to sections
+// Keyboard: 1-5 jump to sections
 document.addEventListener('keydown', (e) => {
   const tag = document.activeElement?.tagName;
   if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return;

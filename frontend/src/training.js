@@ -6,6 +6,7 @@
 import { loadWeights, getStateDict } from './gpt.js';
 import { get, set, subscribe } from './state.js';
 import { t } from './content.js';
+import { createChart, FONT_FAMILY } from './echarts-setup.js';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
@@ -20,79 +21,139 @@ function nearestCheckpoint(step) {
   return CHECKPOINT_STEPS[0];
 }
 
-// --- Weight Inspector ---
-function drawHeatmap(canvas, matrix, label) {
+// --- Weight Inspector (ECharts heatmaps) ---
+
+const WEIGHT_MATRICES = [
+  { key: 'wte', tKey: 'weight.wte', dims: [27, 16] },
+  { key: 'wpe', tKey: 'weight.wpe', dims: [8, 16] },
+  { key: 'layer0.attn_wq', tKey: 'weight.attn_wq', dims: [16, 16] },
+  { key: 'layer0.attn_wk', tKey: 'weight.attn_wk', dims: [16, 16] },
+  { key: 'layer0.attn_wv', tKey: 'weight.attn_wv', dims: [16, 16] },
+  { key: 'layer0.attn_wo', tKey: 'weight.attn_wo', dims: [16, 16] },
+  { key: 'lm_head', tKey: 'weight.lm_head', dims: [27, 16] },
+];
+
+let weightCharts = {};
+
+// Legacy drawHeatmap still used by filmstrip canvases
+function drawHeatmap(canvas, matrix) {
   const rows = matrix.length;
   const cols = matrix[0].length;
   canvas.width = cols;
   canvas.height = rows;
   const ctx = canvas.getContext('2d');
 
-  // Find global min/max for color scale
-  let min = Infinity, max = -Infinity;
-  for (const row of matrix) {
-    for (const v of row) {
-      if (v < min) min = v;
-      if (v > max) max = v;
-    }
-  }
-  const absMax = Math.max(Math.abs(min), Math.abs(max), 0.001);
+  let absMax = 0;
+  for (const row of matrix) for (const v of row) absMax = Math.max(absMax, Math.abs(v));
+  if (absMax < 0.001) absMax = 0.001;
 
   for (let r = 0; r < rows; r++) {
     for (let c = 0; c < cols; c++) {
-      const v = matrix[r][c] / absMax; // -1 to 1
-      let red, green, blue;
+      const v = matrix[r][c] / absMax;
       if (v >= 0) {
-        // Blue scale for positive
-        red = Math.round(15 + (1 - v) * 30);
-        green = Math.round(23 + (1 - v) * 30);
-        blue = Math.round(80 + v * 175);
+        ctx.fillStyle = `rgb(${Math.round(15 + (1 - v) * 30)}, ${Math.round(23 + (1 - v) * 30)}, ${Math.round(80 + v * 175)})`;
       } else {
-        // Red scale for negative
         const a = Math.abs(v);
-        red = Math.round(80 + a * 175);
-        green = Math.round(23 + (1 - a) * 30);
-        blue = Math.round(15 + (1 - a) * 30);
+        ctx.fillStyle = `rgb(${Math.round(80 + a * 175)}, ${Math.round(23 + (1 - a) * 30)}, ${Math.round(15 + (1 - a) * 30)})`;
       }
-      ctx.fillStyle = `rgb(${red}, ${green}, ${blue})`;
       ctx.fillRect(c, r, 1, 1);
     }
   }
+}
+
+function matrixToHeatmapData(matrix) {
+  const data = [];
+  let absMax = 0;
+  for (const row of matrix) for (const v of row) absMax = Math.max(absMax, Math.abs(v));
+  for (let r = 0; r < matrix.length; r++) {
+    for (let c = 0; c < matrix[0].length; c++) {
+      data.push([c, r, matrix[r][c]]);
+    }
+  }
+  return { data, absMax };
 }
 
 function renderWeightInspector(stateDict) {
   const container = document.getElementById('weight-inspector');
   if (!stateDict) {
     container.innerHTML = '<p style="color:var(--text-dim);font-size:0.85rem">No weights loaded</p>';
+    disposeWeightCharts();
     return;
   }
 
-  const matrices = [
-    { key: 'wte', tKey: 'weight.wte', dims: '27 × 16' },
-    { key: 'wpe', tKey: 'weight.wpe', dims: '8 × 16' },
-    { key: 'layer0.attn_wq', tKey: 'weight.attn_wq', dims: '16 × 16' },
-    { key: 'layer0.attn_wk', tKey: 'weight.attn_wk', dims: '16 × 16' },
-    { key: 'layer0.attn_wv', tKey: 'weight.attn_wv', dims: '16 × 16' },
-    { key: 'layer0.attn_wo', tKey: 'weight.attn_wo', dims: '16 × 16' },
-    { key: 'lm_head', tKey: 'weight.lm_head', dims: '27 × 16' },
-  ];
-
-  container.innerHTML = '<div class="weight-heatmap-grid">' + matrices.map(({ key, tKey, dims }) => {
-    const label = t(tKey);
-    return `<div class="weight-heatmap">
-      <div class="heatmap-label">${label}</div>
-      <canvas data-weight="${key}" aria-label="${label} weight matrix"></canvas>
-      <div class="dims">${dims}</div>
-    </div>`;
-  }).join('') + '</div>';
-
-  // Draw heatmaps
-  for (const { key } of matrices) {
-    const canvas = container.querySelector(`canvas[data-weight="${key}"]`);
-    if (canvas && stateDict[key]) {
-      drawHeatmap(canvas, stateDict[key], key);
-    }
+  // Create chart containers if not present
+  const existingGrid = container.querySelector('.weight-heatmap-grid');
+  if (!existingGrid) {
+    container.innerHTML = '<div class="weight-heatmap-grid">' + WEIGHT_MATRICES.map(({ key, tKey, dims }) => {
+      const label = t(tKey);
+      return `<div class="weight-heatmap">
+        <div class="heatmap-label">${label}</div>
+        <div data-weight-chart="${key}" style="height:${Math.max(dims[0] * 10, 160)}px" aria-label="${label} weight matrix"></div>
+        <div class="dims">${dims[0]} × ${dims[1]}</div>
+      </div>`;
+    }).join('') + '</div>';
+    disposeWeightCharts();
   }
+
+  // Initialize or update ECharts heatmaps
+  for (const { key, dims } of WEIGHT_MATRICES) {
+    const el = container.querySelector(`[data-weight-chart="${key}"]`);
+    if (!el || !stateDict[key]) continue;
+
+    if (!weightCharts[key]) {
+      weightCharts[key] = createChart(el);
+    }
+
+    const { data, absMax } = matrixToHeatmapData(stateDict[key]);
+    const rows = dims[0];
+    const cols = dims[1];
+
+    weightCharts[key].setOption({
+      tooltip: {
+        formatter: (params) => {
+          const [col, row, val] = params.value;
+          return `<span style="font-family:monospace">${key}[${row}][${col}] = ${val.toFixed(4)}</span>`;
+        },
+      },
+      xAxis: {
+        type: 'category',
+        data: Array.from({ length: cols }, (_, i) => i),
+        axisLabel: { show: false },
+        axisTick: { show: false },
+        splitArea: { show: false },
+      },
+      yAxis: {
+        type: 'category',
+        data: Array.from({ length: rows }, (_, i) => i),
+        axisLabel: { show: false },
+        axisTick: { show: false },
+        splitArea: { show: false },
+        inverse: true,
+      },
+      visualMap: {
+        show: false,
+        min: -absMax,
+        max: absMax,
+        inRange: {
+          color: ['#F87171', '#3D1515', '#141926', '#152850', '#5B8DEF'],
+        },
+      },
+      series: [{
+        type: 'heatmap',
+        data,
+        emphasis: {
+          itemStyle: { shadowBlur: 6, shadowColor: 'rgba(91, 141, 239, 0.4)' },
+        },
+        animationDuration: 400,
+      }],
+      grid: { left: 4, right: 4, top: 4, bottom: 4 },
+    }, true);
+  }
+}
+
+function disposeWeightCharts() {
+  for (const chart of Object.values(weightCharts)) chart.dispose();
+  weightCharts = {};
 }
 
 // --- Weight Evolution Filmstrip ---

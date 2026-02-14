@@ -453,19 +453,15 @@
     .code-panel .number { color: var(--accent-orange); }
     .code-panel .decorator { color: var(--accent-cyan); }
 
-    /* Architecture split layout */
+    /* Architecture split layout — diagram full-width on top, narrative below */
     .arch-split {
-      display: grid;
-      grid-template-columns: minmax(280px, 420px) 1fr;
+      display: flex;
+      flex-direction: column;
       gap: 1.5rem;
     }
 
     .arch-left {
-      position: sticky;
-      top: 4rem;
-      align-self: start;
-      max-height: calc(100dvh - 5rem);
-      overflow-y: auto;
+      width: 100%;
     }
 
     .arch-right {
@@ -1622,6 +1618,10 @@
       pointer-events: none;
     }
 
+    .mini-viz-label {
+      pointer-events: none;
+    }
+
     .expand-icon {
       opacity: 0;
       transition: opacity var(--transition-fast);
@@ -1848,16 +1848,6 @@
     }
 
     /* Responsive */
-    @media (max-width: 768px) {
-      .arch-split {
-        grid-template-columns: 1fr;
-      }
-
-      .arch-left {
-        position: static;
-        max-height: none;
-      }
-    }
 
     @media (max-width: 640px) {
       .app { padding: 1.5rem 1rem 3rem; }
@@ -1872,6 +1862,55 @@
       .attn-head-selector { flex-wrap: wrap; }
       .attn-token-row { overflow-x: auto; flex-wrap: nowrap; -webkit-overflow-scrolling: touch; }
       .attn-token { flex-shrink: 0; }
+    }
+
+    /* ECharts containers */
+    .echart-tall {
+      min-height: 400px;
+    }
+
+    .echart-medium {
+      min-height: 350px;
+    }
+
+    .echart-short {
+      min-height: 300px;
+    }
+
+    /* Data explorer */
+    .data-search-field {
+      width: 100%;
+    }
+
+    .data-stats {
+      margin-bottom: 1rem;
+    }
+
+    .data-name-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+      gap: 4px;
+      font-family: var(--font-mono);
+      font-size: 0.85rem;
+      color: var(--text-secondary);
+      max-height: 300px;
+      overflow-y: auto;
+      background: rgba(0, 0, 0, 0.15);
+      border-radius: var(--radius-md);
+      padding: 0.75rem;
+    }
+
+    .data-name-grid span {
+      padding: 2px 4px;
+      border-radius: var(--radius-sm);
+    }
+
+    .data-name-grid span:hover {
+      background: var(--accent-subtle);
+    }
+
+    .data-load-more {
+      margin-top: 0.75rem;
     }
 
     /* Reduced motion */
@@ -1903,6 +1942,7 @@
         <a class="mini-nav-link" data-section="architecture" href="#section-architecture" aria-current="false">Architecture</a>
         <a class="mini-nav-link" data-section="training" href="#section-training" aria-current="false">Training</a>
         <a class="mini-nav-link" data-section="generation" href="#section-generation" aria-current="false">Generation</a>
+        <a class="mini-nav-link" data-section="data" href="#section-data" aria-current="false">Data</a>
       </div>
       <button class="mini-nav-toggle" id="eli5-toggle"
               aria-pressed="false"
@@ -1967,7 +2007,6 @@
             <option value="6">6</option>
             <option value="7">7</option>
           </select>
-          <button class="btn btn-sm" id="btn-run-forward">Run Forward Pass</button>
         </div>
         <div class="arch-gen-context" id="arch-gen-context" aria-live="polite" hidden></div>
       </div>
@@ -1998,6 +2037,14 @@
         <div class="arch-right" id="arch-narrative-container">
           <!-- JS renders narrative blocks here -->
         </div>
+      </div>
+      <div class="card">
+        <h3>Data Flow</h3>
+        <div id="arch-sankey-chart" class="echart-tall" aria-label="Sankey diagram showing data flow through the network"></div>
+      </div>
+      <div class="card">
+        <h3>Embedding Space</h3>
+        <div id="arch-embedding-chart" class="echart-medium" aria-label="2D PCA projection of learned character embeddings"></div>
       </div>
       <div class="card arch-full-source-card">
         <div class="collapsible-header" id="arch-full-source-toggle" role="button" tabindex="0" aria-expanded="false" aria-controls="arch-full-source-content">
@@ -2099,6 +2146,34 @@
           <span class="chevron" aria-hidden="true">&#9660;</span>
         </div>
         <div class="collapsible-content" id="infer-inter-content"></div>
+      </div>
+    </section>
+
+    <!-- ===== DATA EXPLORER ===== -->
+    <section class="scroll-section" id="section-data" data-section="data">
+      <div class="card">
+        <h2>Data Explorer</h2>
+        <p class="arch-detail-desc">Explore the 32K training names and the patterns the model learns from</p>
+        <div class="controls-row" id="data-search-row">
+          <div class="control-group">
+            <label for="data-search-input">Search names</label>
+            <input type="text" id="data-search-input" class="token-input data-search-field" placeholder="Search..." aria-label="Filter training names by prefix" autocomplete="off">
+          </div>
+        </div>
+        <div id="data-stats" class="intro-stats data-stats"></div>
+        <div id="data-name-list"></div>
+      </div>
+      <div class="card">
+        <h3>Bigram Frequencies</h3>
+        <div id="data-bigram-chart" class="echart-tall"></div>
+      </div>
+      <div class="card">
+        <h3>Name Length Distribution</h3>
+        <div id="data-length-chart" class="echart-short"></div>
+      </div>
+      <div class="card">
+        <h3>Character Position Frequencies</h3>
+        <div id="data-position-chart" class="echart-tall"></div>
       </div>
     </section>
 
