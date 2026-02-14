@@ -1200,6 +1200,39 @@
       to { transform: rotate(360deg); }
     }
 
+    /* ELI5 toggle */
+    .mini-nav-toggle {
+      margin-left: auto;
+      flex: 0 0 auto;
+      min-height: 44px;
+      padding: 0.5rem 1rem;
+      border: 1px solid var(--glass-border);
+      border-radius: var(--radius-md);
+      background: var(--bg-tertiary);
+      color: var(--text-muted);
+      font-family: var(--font-sans);
+      font-size: 0.8rem;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      cursor: pointer;
+      transition: all var(--transition-fast);
+    }
+
+    .mini-nav-toggle:hover {
+      color: var(--text-secondary);
+      background: var(--bg-quaternary);
+    }
+
+    .mini-nav-toggle[aria-pressed="true"] {
+      background: var(--accent-purple);
+      color: white;
+      border-color: var(--accent-purple);
+    }
+
+    .eli5-active .arch-code-snippet {
+      display: none;
+    }
+
     /* Responsive */
     @media (max-width: 768px) {
       .arch-split {
@@ -1254,6 +1287,12 @@
       <a class="mini-nav-link" data-section="architecture" href="#section-architecture" aria-current="false">Architecture</a>
       <a class="mini-nav-link" data-section="training" href="#section-training" aria-current="false">Training</a>
       <a class="mini-nav-link" data-section="generation" href="#section-generation" aria-current="false">Generation</a>
+      <button class="mini-nav-toggle" id="eli5-toggle"
+              aria-pressed="false"
+              aria-label="Toggle simple explanations"
+              title="Switch between technical and plain-language descriptions">
+        ELI5
+      </button>
     </nav>
 
     <!-- ===== INTRO ===== -->
@@ -1280,7 +1319,7 @@
     <!-- ===== ARCHITECTURE ===== -->
     <section class="scroll-section" id="section-architecture" data-section="architecture">
       <div class="card">
-        <h2>Forward Pass</h2>
+        <h2 data-content-key="heading.forwardPass">Forward Pass</h2>
         <div class="input-selector" id="arch-input-selector">
           <label for="arch-token-select">Token</label>
           <select id="arch-token-select" aria-label="Input token"></select>
@@ -1329,7 +1368,7 @@
     <!-- ===== TRAINING ===== -->
     <section class="scroll-section" id="section-training" data-section="training">
       <div class="card">
-        <h2>Training Progress</h2>
+        <h2 data-content-key="heading.trainingProgress">Training Progress</h2>
         <div class="train-mode-controls" id="train-mode-controls">
           <div class="toggle-group" role="group" aria-label="Training mode">
             <button id="btn-pretrained" aria-pressed="true">Pre-trained</button>
@@ -1357,7 +1396,7 @@
         </div>
       </div>
       <div class="card">
-        <h3>Weight Inspector</h3>
+        <h3 data-content-key="heading.weightInspector">Weight Inspector</h3>
         <div class="weight-heatmap-grid" id="weight-inspector">
           <div class="skeleton" style="height:200px"></div>
         </div>
@@ -1367,10 +1406,10 @@
     <!-- ===== GENERATION ===== -->
     <section class="scroll-section" id="section-generation" data-section="generation">
       <div class="card">
-        <h2>Name Generator</h2>
+        <h2 data-content-key="heading.nameGenerator">Name Generator</h2>
         <div class="controls-row">
           <div class="control-group">
-            <label for="temp-slider" title="Controls randomness: lower = more predictable, higher = more creative">Temperature</label>
+            <label for="temp-slider" data-title-key="tooltip.temperature" title="Controls randomness: lower = more predictable, higher = more creative">Temperature</label>
             <div class="slider-row" style="margin-bottom:0">
               <input type="range" id="temp-slider" min="1" max="20" value="5" aria-label="Temperature">
               <span class="value" id="temp-value">0.5</span>
@@ -1383,10 +1422,10 @@
         </div>
       </div>
       <div class="card">
-        <h3>Token Probabilities</h3>
+        <h3 data-content-key="heading.tokenProbs">Token Probabilities</h3>
         <div class="prob-section" id="prob-section">
           <div class="prob-column">
-            <h4 title="Raw scores before normalization — higher means the model thinks that token is more likely">Logits (raw)</h4>
+            <h4 data-title-key="tooltip.logits" title="Raw scores before normalization — higher means the model thinks that token is more likely">Logits (raw)</h4>
             <div class="prob-bars" id="logit-bars-container" aria-label="Raw logit scores"></div>
           </div>
           <div class="prob-column">
@@ -1396,7 +1435,7 @@
         </div>
       </div>
       <div class="card attn-explorer" id="attn-viz-container">
-        <h3>Attention Explorer</h3>
+        <h3 data-content-key="heading.attnExplorer">Attention Explorer</h3>
         <div class="attn-head-selector toggle-group" role="group" aria-label="Attention head filter">
           <button data-head="all" aria-pressed="true">All</button>
           <button data-head="0" aria-pressed="false">Head 1</button>
@@ -1410,7 +1449,7 @@
       </div>
       <div class="card">
         <div class="collapsible-header" id="infer-inter-toggle" role="button" tabindex="0" aria-expanded="false" aria-controls="infer-inter-content">
-          <h3>Intermediate Values</h3>
+          <h3 data-content-key="heading.intermediateValues">Intermediate Values</h3>
           <span class="chevron" aria-hidden="true">&#9660;</span>
         </div>
         <div class="collapsible-content" id="infer-inter-content"></div>

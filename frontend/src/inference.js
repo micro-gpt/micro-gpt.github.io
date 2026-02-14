@@ -6,6 +6,7 @@
 
 import { gptForward, softmax, sampleFrom, N_LAYER, N_HEAD, BLOCK_SIZE } from './gpt.js';
 import { set } from './state.js';
+import { t } from './content.js';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 const HEAD_COLORS = ['var(--accent-blue)', 'var(--accent-purple)', 'var(--accent-green)', 'var(--accent-cyan)'];
@@ -245,23 +246,12 @@ function renderIntermediateViewer(intermediates) {
     return;
   }
 
-  const sections = [
-    { key: 'tokEmb', label: 'Token Embedding' },
-    { key: 'posEmb', label: 'Position Embedding' },
-    { key: 'combined', label: 'Combined (tok + pos)' },
-    { key: 'postNorm0', label: 'After initial RMSNorm' },
-    { key: 'postNorm1', label: 'After pre-attention RMSNorm' },
-    { key: 'q', label: 'Q projection' },
-    { key: 'k', label: 'K projection' },
-    { key: 'v', label: 'V projection' },
-    { key: 'attnOut', label: 'Attention output' },
-    { key: 'postResidual1', label: 'After residual 1' },
-    { key: 'postNorm2', label: 'After pre-MLP RMSNorm' },
-    { key: 'mlpHidden', label: 'MLP hidden (64-dim)' },
-    { key: 'mlpActivated', label: 'After ReLU²' },
-    { key: 'mlpOut', label: 'MLP output' },
-    { key: 'postResidual2', label: 'Final hidden state' },
+  const interKeys = [
+    'tokEmb', 'posEmb', 'combined', 'postNorm0', 'postNorm1',
+    'q', 'k', 'v', 'attnOut', 'postResidual1', 'postNorm2',
+    'mlpHidden', 'mlpActivated', 'mlpOut', 'postResidual2',
   ];
+  const sections = interKeys.map(key => ({ key, label: t('inter.' + key) }));
 
   const html = sections.map(({ key, label }) => {
     const values = intermediates[key];

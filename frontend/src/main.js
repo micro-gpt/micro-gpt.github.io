@@ -1,5 +1,6 @@
 import { loadWeights } from './gpt.js';
 import { get, set, subscribe } from './state.js';
+import { t } from './content.js';
 
 // Data cache
 let data = null;
@@ -179,6 +180,34 @@ subscribe('weightsVersion', () => {
     initObserver.observe(archEl);
   }
 });
+
+// --- ELI5 toggle ---
+const eli5Btn = document.getElementById('eli5-toggle');
+const eli5Stored = localStorage.getItem('eli5') === 'true';
+set('eli5', eli5Stored);
+eli5Btn.setAttribute('aria-pressed', String(eli5Stored));
+if (eli5Stored) document.documentElement.classList.add('eli5-active');
+
+eli5Btn.addEventListener('click', () => {
+  const next = !get('eli5');
+  set('eli5', next);
+  localStorage.setItem('eli5', String(next));
+  eli5Btn.setAttribute('aria-pressed', String(next));
+  document.documentElement.classList.toggle('eli5-active', next);
+});
+
+function updateContentKeys() {
+  document.querySelectorAll('[data-content-key]').forEach(el => {
+    const text = t(el.dataset.contentKey);
+    if (text) el.textContent = text;
+  });
+  document.querySelectorAll('[data-title-key]').forEach(el => {
+    const text = t(el.dataset.titleKey);
+    if (text) el.setAttribute('title', text);
+  });
+}
+subscribe('eli5', updateContentKeys);
+if (eli5Stored) updateContentKeys();
 
 // Init
 set('activeSection', 'intro');

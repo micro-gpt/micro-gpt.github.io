@@ -6,57 +6,44 @@
 
 import { gptForward, softmax, N_LAYER } from './gpt.js';
 import { get, set, subscribe } from './state.js';
+import { t } from './content.js';
 
 const BLOCKS = [
-  { id: 'tok-embed', label: 'Token Embed', color: '#5B8DEF', dimOut: '16-dim', interKey: 'tokEmb', lines: [109, 109], desc: 'Look up the learned 16-dimensional vector for this token' },
-  { id: 'pos-embed', label: '+ Pos Embed', color: '#5B8DEF', dimOut: '16-dim', interKey: 'combined', lines: [110, 111], desc: 'Add position information so the model knows token order' },
-  { id: 'rmsnorm0', label: 'RMSNorm', color: '#9B7AEA', dimOut: '16-dim', interKey: 'postNorm0', lines: [103, 106], desc: 'Normalize the vector magnitude to stabilize training' },
-  { id: 'rmsnorm1', label: 'RMSNorm', color: '#9B7AEA', dimOut: '16-dim', interKey: 'postNorm1', lines: [103, 106], desc: 'Normalize before attention to keep gradients stable' },
-  { id: 'attention', label: 'Multi-Head Attention', color: '#22D3EE', dimOut: '16-dim', interKey: 'attnOut', wide: true, lines: [118, 133], desc: '4 heads independently compute attention weights, then combine' },
-  { id: 'residual1', label: '+ Residual', color: '#6B7585', dimOut: '16-dim', interKey: 'postResidual1', lines: [134, 134], desc: 'Add the original input back, preserving earlier information' },
-  { id: 'rmsnorm2', label: 'RMSNorm', color: '#9B7AEA', dimOut: '16-dim', interKey: 'postNorm2', lines: [103, 106], desc: 'Normalize before the MLP feed-forward layer' },
-  { id: 'mlp', label: 'MLP (ReLU²)', color: '#FB923C', dimOut: '16-dim', interKey: 'mlpOut', wide: true, lines: [138, 140], desc: 'Two linear layers with squared ReLU: expand to 64-dim, compress back' },
-  { id: 'residual2', label: '+ Residual', color: '#6B7585', dimOut: '16-dim', interKey: 'postResidual2', lines: [141, 141], desc: 'Add MLP input back for a second residual connection' },
-  { id: 'lm-head', label: 'LM Head', color: '#4ADE80', dimOut: '27 logits', interKey: 'logits', lines: [143, 143], desc: 'Project 16-dim hidden state to 27 logits, one per token' },
-  { id: 'softmax', label: 'Softmax', color: '#4ADE80', dimOut: '27 probs', interKey: 'probs', lines: [97, 101], desc: 'Convert raw logits into a probability distribution' },
+  { id: 'tok-embed', label: 'Token Embed', color: '#5B8DEF', dimOut: '16-dim', interKey: 'tokEmb', lines: [109, 109] },
+  { id: 'pos-embed', label: '+ Pos Embed', color: '#5B8DEF', dimOut: '16-dim', interKey: 'combined', lines: [110, 111] },
+  { id: 'rmsnorm0', label: 'RMSNorm', color: '#9B7AEA', dimOut: '16-dim', interKey: 'postNorm0', lines: [103, 106] },
+  { id: 'rmsnorm1', label: 'RMSNorm', color: '#9B7AEA', dimOut: '16-dim', interKey: 'postNorm1', lines: [103, 106] },
+  { id: 'attention', label: 'Multi-Head Attention', color: '#22D3EE', dimOut: '16-dim', interKey: 'attnOut', wide: true, lines: [118, 133] },
+  { id: 'residual1', label: '+ Residual', color: '#6B7585', dimOut: '16-dim', interKey: 'postResidual1', lines: [134, 134] },
+  { id: 'rmsnorm2', label: 'RMSNorm', color: '#9B7AEA', dimOut: '16-dim', interKey: 'postNorm2', lines: [103, 106] },
+  { id: 'mlp', label: 'MLP (ReLU²)', color: '#FB923C', dimOut: '16-dim', interKey: 'mlpOut', wide: true, lines: [138, 140] },
+  { id: 'residual2', label: '+ Residual', color: '#6B7585', dimOut: '16-dim', interKey: 'postResidual2', lines: [141, 141] },
+  { id: 'lm-head', label: 'LM Head', color: '#4ADE80', dimOut: '27 logits', interKey: 'logits', lines: [143, 143] },
+  { id: 'softmax', label: 'Softmax', color: '#4ADE80', dimOut: '27 probs', interKey: 'probs', lines: [97, 101] },
 ];
 
 // Detailed intermediate data labels per block
 const BLOCK_DETAILS = {
-  'tok-embed': { title: 'Token Embedding', keys: [{ key: 'tokEmb', label: 'wte[token_id]', dim: 16 }] },
-  'pos-embed': { title: 'Position Embedding', keys: [{ key: 'posEmb', label: 'wpe[pos_id]', dim: 16 }, { key: 'combined', label: 'tok + pos', dim: 16 }] },
-  'rmsnorm0': { title: 'RMSNorm (initial)', keys: [{ key: 'postNorm0', label: 'rmsnorm(x)', dim: 16 }] },
-  'rmsnorm1': { title: 'RMSNorm (pre-attention)', keys: [{ key: 'postNorm1', label: 'rmsnorm(x)', dim: 16 }] },
-  'attention': { title: 'Multi-Head Attention', keys: [
+  'tok-embed': { keys: [{ key: 'tokEmb', label: 'wte[token_id]', dim: 16 }] },
+  'pos-embed': { keys: [{ key: 'posEmb', label: 'wpe[pos_id]', dim: 16 }, { key: 'combined', label: 'tok + pos', dim: 16 }] },
+  'rmsnorm0': { keys: [{ key: 'postNorm0', label: 'rmsnorm(x)', dim: 16 }] },
+  'rmsnorm1': { keys: [{ key: 'postNorm1', label: 'rmsnorm(x)', dim: 16 }] },
+  'attention': { keys: [
     { key: 'q', label: 'Q projection', dim: 16 },
     { key: 'k', label: 'K projection', dim: 16 },
     { key: 'v', label: 'V projection', dim: 16 },
     { key: 'attnOut', label: 'Attention output (after Wo)', dim: 16 },
   ]},
-  'residual1': { title: 'Residual Connection 1', keys: [{ key: 'postResidual1', label: 'x + x_residual', dim: 16 }] },
-  'rmsnorm2': { title: 'RMSNorm (pre-MLP)', keys: [{ key: 'postNorm2', label: 'rmsnorm(x)', dim: 16 }] },
-  'mlp': { title: 'MLP (ReLU²)', keys: [
+  'residual1': { keys: [{ key: 'postResidual1', label: 'x + x_residual', dim: 16 }] },
+  'rmsnorm2': { keys: [{ key: 'postNorm2', label: 'rmsnorm(x)', dim: 16 }] },
+  'mlp': { keys: [
     { key: 'mlpHidden', label: 'fc1 output (pre-activation)', dim: 64 },
     { key: 'mlpActivated', label: 'After ReLU²', dim: 64 },
     { key: 'mlpOut', label: 'fc2 output', dim: 16 },
   ]},
-  'residual2': { title: 'Residual Connection 2', keys: [{ key: 'postResidual2', label: 'x + x_residual', dim: 16 }] },
-  'lm-head': { title: 'LM Head', keys: [{ key: 'logits', label: 'Linear → 27 logits', dim: 27 }] },
-  'softmax': { title: 'Softmax', keys: [{ key: 'probs', label: 'Probabilities', dim: 27 }] },
-};
-
-const BLOCK_TOOLTIPS = {
-  'tok-embed': 'Look up the learned vector representation for this token',
-  'pos-embed': 'Add position information so the model knows token order',
-  'rmsnorm0': 'Root Mean Square Normalization — stabilizes values before processing',
-  'rmsnorm1': 'Root Mean Square Normalization — stabilizes values before attention',
-  'attention': 'Each head learns different relationships between tokens, then results are combined',
-  'residual1': 'Skip connection — adds original input back to preserve earlier information',
-  'rmsnorm2': 'Root Mean Square Normalization — stabilizes values before the MLP',
-  'mlp': 'Feed-forward network with squared ReLU activation: expand to 64-dim, compress back to 16-dim',
-  'residual2': 'Skip connection — adds MLP input back for a second residual path',
-  'lm-head': 'Final linear layer projecting hidden state to one score per vocabulary token',
-  'softmax': 'Converts raw scores into a probability distribution that sums to 1',
+  'residual2': { keys: [{ key: 'postResidual2', label: 'x + x_residual', dim: 16 }] },
+  'lm-head': { keys: [{ key: 'logits', label: 'Linear → 27 logits', dim: 27 }] },
+  'softmax': { keys: [{ key: 'probs', label: 'Probabilities', dim: 27 }] },
 };
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
@@ -474,10 +461,9 @@ function renderProbBars(probs, vocab) {
 function renderNarrativeBlocks(intermediates, vocab) {
   const container = document.getElementById('arch-narrative-container');
   container.innerHTML = BLOCKS.map((block, i) => {
-    const details = BLOCK_DETAILS[block.id];
     const html = [];
-    html.push(`<h3 class="arch-detail-title">${escHtml(details.title)}</h3>`);
-    html.push(`<p class="arch-detail-desc">${escHtml(block.desc)}</p>`);
+    html.push(`<h3 class="arch-detail-title">${escHtml(t(block.id + '.title'))}</h3>`);
+    html.push(`<p class="arch-detail-desc">${escHtml(t(block.id + '.desc'))}</p>`);
     html.push(renderCodeSnippet(block.lines[0], block.lines[1]));
     html.push(`<div class="arch-narrative-data">${renderBlockData(i, intermediates, vocab)}</div>`);
     return `<div class="arch-narrative" data-block-index="${i}"><div class="card" style="--block-color: ${block.color}">${html.join('')}</div></div>`;
@@ -593,11 +579,9 @@ function createSVG() {
     g.setAttribute('aria-label', `${block.label}: ${block.dimOut}`);
 
     // SVG tooltip
-    if (BLOCK_TOOLTIPS[block.id]) {
-      const title = document.createElementNS(SVG_NS, 'title');
-      title.textContent = BLOCK_TOOLTIPS[block.id];
-      g.appendChild(title);
-    }
+    const titleEl = document.createElementNS(SVG_NS, 'title');
+    titleEl.textContent = t(block.id + '.tooltip');
+    g.appendChild(titleEl);
 
     const rect = document.createElementNS(SVG_NS, 'rect');
     rect.setAttribute('x', x);
@@ -829,17 +813,32 @@ export function initArchitecture({ vocab }) {
   renderNarrativeBlocks(currentIntermediates, vocab);
 
   // Set up scroll observer — highlights block when it enters top 40% of viewport
-  const scrollObserver = new IntersectionObserver((entries) => {
-    for (const entry of entries) {
-      if (entry.isIntersecting) {
-        highlightBlock(parseInt(entry.target.dataset.blockIndex));
+  let scrollObserver = null;
+  function setupScrollObserver() {
+    if (scrollObserver) scrollObserver.disconnect();
+    scrollObserver = new IntersectionObserver((entries) => {
+      for (const entry of entries) {
+        if (entry.isIntersecting) {
+          highlightBlock(parseInt(entry.target.dataset.blockIndex));
+        }
       }
-    }
-  }, { rootMargin: '0px 0px -60% 0px', threshold: 0 });
+    }, { rootMargin: '0px 0px -60% 0px', threshold: 0 });
+    narrativeContainer.querySelectorAll('.arch-narrative').forEach(el => {
+      scrollObserver.observe(el);
+    });
+  }
+  setupScrollObserver();
 
-  narrativeContainer.querySelectorAll('.arch-narrative').forEach(el => {
-    scrollObserver.observe(el);
-  });
+  // ELI5 mode: update tooltips in-place, re-render narrative blocks
+  cleanupSubs.push(subscribe('eli5', () => {
+    svg.querySelectorAll('.arch-block').forEach(g => {
+      const titleEl = g.querySelector('title');
+      if (titleEl) titleEl.textContent = t(g.dataset.block + '.tooltip');
+    });
+    renderNarrativeBlocks(currentIntermediates, vocab);
+    setupScrollObserver();
+    highlightBlock(currentIndex);
+  }));
 
   // Start at block 0
   highlightBlock(0);

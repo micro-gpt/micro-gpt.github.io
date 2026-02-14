@@ -5,6 +5,7 @@
 
 import { loadWeights, getStateDict } from './gpt.js';
 import { get, set, subscribe } from './state.js';
+import { t } from './content.js';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
@@ -67,22 +68,23 @@ function renderWeightInspector(stateDict) {
   }
 
   const matrices = [
-    { key: 'wte', label: 'Token Embeddings (wte)', dims: '27 × 16' },
-    { key: 'wpe', label: 'Position Embeddings (wpe)', dims: '8 × 16' },
-    { key: 'layer0.attn_wq', label: 'Attention Wq', dims: '16 × 16' },
-    { key: 'layer0.attn_wk', label: 'Attention Wk', dims: '16 × 16' },
-    { key: 'layer0.attn_wv', label: 'Attention Wv', dims: '16 × 16' },
-    { key: 'layer0.attn_wo', label: 'Attention Wo', dims: '16 × 16' },
-    { key: 'lm_head', label: 'LM Head', dims: '27 × 16' },
+    { key: 'wte', tKey: 'weight.wte', dims: '27 × 16' },
+    { key: 'wpe', tKey: 'weight.wpe', dims: '8 × 16' },
+    { key: 'layer0.attn_wq', tKey: 'weight.attn_wq', dims: '16 × 16' },
+    { key: 'layer0.attn_wk', tKey: 'weight.attn_wk', dims: '16 × 16' },
+    { key: 'layer0.attn_wv', tKey: 'weight.attn_wv', dims: '16 × 16' },
+    { key: 'layer0.attn_wo', tKey: 'weight.attn_wo', dims: '16 × 16' },
+    { key: 'lm_head', tKey: 'weight.lm_head', dims: '27 × 16' },
   ];
 
-  container.innerHTML = matrices.map(({ key, label, dims }) =>
-    `<div class="weight-heatmap">
+  container.innerHTML = matrices.map(({ key, tKey, dims }) => {
+    const label = t(tKey);
+    return `<div class="weight-heatmap">
       <div class="heatmap-label">${label}</div>
       <canvas data-weight="${key}" title="Click to inspect ${label}"></canvas>
       <div class="dims">${dims}</div>
-    </div>`
-  ).join('');
+    </div>`;
+  }).join('');
 
   // Draw heatmaps
   for (const { key } of matrices) {
@@ -526,6 +528,11 @@ export function initTraining({ trainingLog, checkpoints, vocab, weights }, onWei
   // Mode toggle handlers
   btnPretrained.addEventListener('click', showPretrained);
   btnTrainScratch.addEventListener('click', startLiveTraining);
+
+  // Re-render weight inspector labels on ELI5 toggle
+  subscribe('eli5', () => {
+    renderWeightInspector(getStateDict());
+  });
 
   // Initialize with pre-trained view
   showPretrained();
