@@ -45,6 +45,20 @@ const BLOCK_DETAILS = {
   'softmax': { title: 'Softmax', keys: [{ key: 'probs', label: 'Probabilities', dim: 27 }] },
 };
 
+const BLOCK_TOOLTIPS = {
+  'tok-embed': 'Look up the learned vector representation for this token',
+  'pos-embed': 'Add position information so the model knows token order',
+  'rmsnorm0': 'Root Mean Square Normalization — stabilizes values before processing',
+  'rmsnorm1': 'Root Mean Square Normalization — stabilizes values before attention',
+  'attention': 'Each head learns different relationships between tokens, then results are combined',
+  'residual1': 'Skip connection — adds original input back to preserve earlier information',
+  'rmsnorm2': 'Root Mean Square Normalization — stabilizes values before the MLP',
+  'mlp': 'Feed-forward network with squared ReLU activation: expand to 64-dim, compress back to 16-dim',
+  'residual2': 'Skip connection — adds MLP input back for a second residual path',
+  'lm-head': 'Final linear layer projecting hidden state to one score per vocabulary token',
+  'softmax': 'Converts raw scores into a probability distribution that sums to 1',
+};
+
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
 // --- Full microgpt.py source (embedded) ---
@@ -578,6 +592,13 @@ function createSVG() {
     g.setAttribute('tabindex', '0');
     g.setAttribute('aria-label', `${block.label}: ${block.dimOut}`);
 
+    // SVG tooltip
+    if (BLOCK_TOOLTIPS[block.id]) {
+      const title = document.createElementNS(SVG_NS, 'title');
+      title.textContent = BLOCK_TOOLTIPS[block.id];
+      g.appendChild(title);
+    }
+
     const rect = document.createElementNS(SVG_NS, 'rect');
     rect.setAttribute('x', x);
     rect.setAttribute('y', y);
@@ -629,7 +650,7 @@ export function initArchitecture({ vocab }) {
   // Populate token selector
   const chars = vocab.chars;
   const options = chars.map((ch, i) => `<option value="${i}">${ch}</option>`).join('');
-  tokenSelect.innerHTML = options + `<option value="${vocab.bos}">BOS</option>`;
+  tokenSelect.innerHTML = options + `<option value="${vocab.bos}" title="Beginning Of Sequence — a special token that signals the start of generation">BOS</option>`;
 
   // Create SVG diagram
   const svg = createSVG();
@@ -707,10 +728,26 @@ export function initArchitecture({ vocab }) {
     if (currentIndex < BLOCKS.length - 1) scrollToBlock(currentIndex + 1);
   });
 
-  // Run Forward Pass: recompute + update all narrative data
+  // Run Forward Pass: recompute + update all narrative data with visual feedback
   btnRun.addEventListener('click', () => {
     computeForwardPass();
     updateNarrativeData(currentIntermediates, vocab);
+
+    // Flash data sections
+    narrativeContainer.querySelectorAll('.arch-narrative-data').forEach(el => {
+      el.classList.remove('flash');
+      el.offsetWidth; // force reflow to re-trigger animation
+      el.classList.add('flash');
+    });
+
+    // Button feedback
+    const originalText = btnRun.textContent;
+    btnRun.textContent = 'Computed ✓';
+    btnRun.disabled = true;
+    setTimeout(() => {
+      btnRun.textContent = originalText;
+      btnRun.disabled = false;
+    }, 800);
   });
 
   // Auto-update on input change

@@ -32,6 +32,7 @@ function renderBars(containerId, vocab) {
 
 function updateProbBars(containerId, values, selectedToken, cssClass) {
   const container = document.getElementById(containerId);
+  container.classList.remove('prob-bars-empty');
   const rows = container.querySelectorAll('.prob-bar-row');
 
   const indexed = Array.from(values).map((v, i) => ({ v, i }));
@@ -82,10 +83,11 @@ function renderAttnTokens() {
 
   container.innerHTML = storedTokens.map((t, i) => {
     const label = t === storedVocab.bos ? 'BOS' : (chars[t] === ' ' ? '␣' : chars[t]);
+    const titleAttr = t === storedVocab.bos ? ' title="Beginning Of Sequence — a special token that signals the start of generation"' : '';
     const classes = ['attn-token'];
     if (i === selectedTokenIdx) classes.push('selected');
     if (i === storedTokens.length - 1 && generating) classes.push('current');
-    return `<button class="${classes.join(' ')}" data-idx="${i}" aria-label="Token ${i}: ${label}">${label}</button>`;
+    return `<button class="${classes.join(' ')}" data-idx="${i}" aria-label="Token ${i}: ${label}"${titleAttr}>${label}</button>`;
   }).join('');
 
   const buttons = container.querySelectorAll('.attn-token');
@@ -346,6 +348,8 @@ export function initInference({ vocab }) {
 
   renderBars('logit-bars-container', vocab);
   renderBars('prob-bars-container', vocab);
+  document.getElementById('logit-bars-container').classList.add('prob-bars-empty');
+  document.getElementById('prob-bars-container').classList.add('prob-bars-empty');
   renderIntermediateViewer(null);
 
   const tempSlider = document.getElementById('temp-slider');
