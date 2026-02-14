@@ -77,14 +77,14 @@ function renderWeightInspector(stateDict) {
     { key: 'lm_head', tKey: 'weight.lm_head', dims: '27 × 16' },
   ];
 
-  container.innerHTML = matrices.map(({ key, tKey, dims }) => {
+  container.innerHTML = '<div class="weight-heatmap-grid">' + matrices.map(({ key, tKey, dims }) => {
     const label = t(tKey);
     return `<div class="weight-heatmap">
       <div class="heatmap-label">${label}</div>
       <canvas data-weight="${key}" aria-label="${label} weight matrix"></canvas>
       <div class="dims">${dims}</div>
     </div>`;
-  }).join('');
+  }).join('') + '</div>';
 
   // Draw heatmaps
   for (const { key } of matrices) {
@@ -92,6 +92,194 @@ function renderWeightInspector(stateDict) {
     if (canvas && stateDict[key]) {
       drawHeatmap(canvas, stateDict[key], key);
     }
+  }
+}
+
+// --- Weight Evolution Filmstrip ---
+let filmstripPlaying = false;
+let filmstripTimer = null;
+let filmstripDiffMode = false;
+let activeFilmstripStep = 500;
+
+const FILMSTRIP_MATRICES = [
+  { key: 'wte', label: 'Token Embed', dims: [27, 16] },
+  { key: 'wpe', label: 'Pos Embed', dims: [8, 16] },
+  { key: 'layer0.attn_wq', label: 'W_Q', dims: [16, 16] },
+  { key: 'layer0.attn_wv', label: 'W_V', dims: [16, 16] },
+  { key: 'lm_head', label: 'LM Head', dims: [27, 16] },
+];
+
+function drawHeatmapDiff(canvas, matrix, prevMatrix) {
+  const rows = matrix.length;
+  const cols = matrix[0].length;
+  canvas.width = cols;
+  canvas.height = rows;
+  const ctx = canvas.getContext('2d');
+
+  // Find max absolute diff for color scale
+  let maxDiff = 0;
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const diff = Math.abs(matrix[r][c] - (prevMatrix ? prevMatrix[r][c] : 0));
+      if (diff > maxDiff) maxDiff = diff;
+    }
+  }
+  if (maxDiff < 0.001) maxDiff = 0.001;
+
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const diff = Math.abs(matrix[r][c] - (prevMatrix ? prevMatrix[r][c] : 0));
+      const intensity = diff / maxDiff;
+      // Orange scale for changes
+      const red = Math.round(30 + intensity * 221);
+      const green = Math.round(20 + intensity * 126);
+      const blue = Math.round(15 + intensity * 45);
+      ctx.fillStyle = `rgb(${red}, ${green}, ${blue})`;
+      ctx.fillRect(c, r, 1, 1);
+    }
+  }
+}
+
+function renderWeightFilmstrip(container, allCheckpointWeights, vocabSize) {
+  if (!allCheckpointWeights) {
+    container.innerHTML = '<p style="color:var(--text-dim);font-size:0.85rem">Loading checkpoint weights...</p>';
+    return;
+  }
+
+  const steps = CHECKPOINT_STEPS.filter(s => allCheckpointWeights[String(s)]);
+  if (steps.length === 0) return;
+
+  // Controls: play button + step buttons + diff toggle
+  let html = '<div class="filmstrip-controls">';
+  html += `<button class="filmstrip-play" id="filmstrip-play-btn" aria-pressed="false" aria-label="Play weight evolution" title="Auto-advance through checkpoints">&#9654;</button>`;
+  html += '<div class="filmstrip-step-btns">';
+  for (const s of steps) {
+    const active = s === activeFilmstripStep ? ' active' : '';
+    html += `<button class="filmstrip-step-btn${active}" data-filmstrip-step="${s}">Step ${s}</button>`;
+  }
+  html += '</div>';
+  html += `<button class="filmstrip-diff-toggle" id="filmstrip-diff-btn" aria-pressed="${filmstripDiffMode}" title="Highlight weight changes between checkpoints">Diff</button>`;
+  html += '</div>';
+
+  // One row per matrix, with all checkpoints as small canvases
+  for (const { key, label } of FILMSTRIP_MATRICES) {
+    html += `<div class="filmstrip-matrix-label">${label}</div>`;
+    html += '<div class="filmstrip-canvases">';
+    for (const s of steps) {
+      const active = s === activeFilmstripStep ? ' active' : '';
+      html += `<div class="filmstrip-frame${active}" data-filmstrip-step="${s}">`;
+      html += `<canvas data-filmstrip-key="${key}" data-filmstrip-step="${s}" aria-label="${label} at step ${s}"></canvas>`;
+      html += `<div class="filmstrip-frame-label">${s}</div>`;
+      html += '</div>';
+    }
+    html += '</div>';
+  }
+
+  container.innerHTML = html;
+
+  // Draw all canvases
+  drawFilmstripCanvases(container, allCheckpointWeights, vocabSize, steps);
+
+  // Event delegation for step buttons
+  container.addEventListener('click', (e) => {
+    const stepBtn = e.target.closest('[data-filmstrip-step]');
+    const playBtn = e.target.closest('#filmstrip-play-btn');
+    const diffBtn = e.target.closest('#filmstrip-diff-btn');
+
+    if (stepBtn && !stepBtn.classList.contains('filmstrip-frame')) {
+      const step = parseInt(stepBtn.dataset.filmstripStep);
+      selectFilmstripStep(container, allCheckpointWeights, vocabSize, steps, step);
+    } else if (playBtn) {
+      toggleFilmstripPlay(container, allCheckpointWeights, vocabSize, steps);
+    } else if (diffBtn) {
+      filmstripDiffMode = !filmstripDiffMode;
+      diffBtn.setAttribute('aria-pressed', String(filmstripDiffMode));
+      drawFilmstripCanvases(container, allCheckpointWeights, vocabSize, steps);
+    }
+  });
+}
+
+function selectFilmstripStep(container, allCheckpointWeights, vocabSize, steps, step) {
+  activeFilmstripStep = step;
+
+  // Update active class on step buttons and frames
+  container.querySelectorAll('.filmstrip-step-btn').forEach(btn => {
+    btn.classList.toggle('active', parseInt(btn.dataset.filmstripStep) === step);
+  });
+  container.querySelectorAll('.filmstrip-frame').forEach(frame => {
+    frame.classList.toggle('active', parseInt(frame.dataset.filmstripStep) === step);
+  });
+
+  // Load these weights into the model
+  if (allCheckpointWeights[String(step)]) {
+    loadWeights(allCheckpointWeights[String(step)], vocabSize);
+    set('weightsVersion', (get('weightsVersion') || 0) + 1);
+  }
+
+  // Update slider to match
+  const slider = document.getElementById('step-slider');
+  const stepValue = document.getElementById('step-value');
+  slider.value = step - 1;
+  stepValue.textContent = step;
+  currentCheckpointStep = step;
+  set('trainingStep', step);
+}
+
+function toggleFilmstripPlay(container, allCheckpointWeights, vocabSize, steps) {
+  const btn = container.querySelector('#filmstrip-play-btn');
+  filmstripPlaying = !filmstripPlaying;
+  btn.setAttribute('aria-pressed', String(filmstripPlaying));
+  btn.innerHTML = filmstripPlaying ? '&#9646;&#9646;' : '&#9654;';
+
+  if (filmstripPlaying) {
+    let idx = steps.indexOf(activeFilmstripStep);
+    if (idx < 0 || idx >= steps.length - 1) idx = -1;
+
+    filmstripTimer = setInterval(() => {
+      idx++;
+      if (idx >= steps.length) {
+        idx = 0;
+      }
+      selectFilmstripStep(container, allCheckpointWeights, vocabSize, steps, steps[idx]);
+
+      // Update checkpoints display
+      const checkpointContainer = document.getElementById('checkpoint-container');
+      if (checkpointContainer) {
+        // Re-render handled by selectFilmstripStep via set('trainingStep')
+      }
+    }, 400);
+  } else {
+    clearInterval(filmstripTimer);
+    filmstripTimer = null;
+  }
+}
+
+function drawFilmstripCanvases(container, allCheckpointWeights, vocabSize, steps) {
+  for (const { key } of FILMSTRIP_MATRICES) {
+    for (let si = 0; si < steps.length; si++) {
+      const s = steps[si];
+      const canvas = container.querySelector(`canvas[data-filmstrip-key="${key}"][data-filmstrip-step="${s}"]`);
+      if (!canvas) continue;
+
+      // Temporarily load these weights to get the state dict
+      loadWeights(allCheckpointWeights[String(s)], vocabSize);
+      const sd = getStateDict();
+      const matrix = sd[key];
+      if (!matrix) continue;
+
+      if (filmstripDiffMode && si > 0) {
+        loadWeights(allCheckpointWeights[String(steps[si - 1])], vocabSize);
+        const prevSd = getStateDict();
+        drawHeatmapDiff(canvas, matrix, prevSd[key]);
+      } else {
+        drawHeatmap(canvas, matrix, key);
+      }
+    }
+  }
+
+  // Restore active checkpoint weights
+  if (allCheckpointWeights[String(activeFilmstripStep)]) {
+    loadWeights(allCheckpointWeights[String(activeFilmstripStep)], vocabSize);
   }
 }
 
@@ -228,6 +416,53 @@ function createTrainingSVG(trainingLog) {
     }
   }
 
+  // Checkpoint markers
+  for (const cp of CHECKPOINT_STEPS) {
+    const entry = trainingLog[cp - 1];
+    if (!entry) continue;
+    const cx = xScale(cp);
+    const cy = yLoss(entry.loss);
+
+    const g = document.createElementNS(SVG_NS, 'g');
+    g.setAttribute('class', 'checkpoint-marker');
+    g.setAttribute('data-step', cp);
+    g.setAttribute('role', 'button');
+    g.setAttribute('tabindex', '0');
+    g.setAttribute('aria-label', `Checkpoint at step ${cp}, loss ${entry.loss.toFixed(2)}`);
+
+    const markerLine = document.createElementNS(SVG_NS, 'line');
+    markerLine.setAttribute('x1', cx);
+    markerLine.setAttribute('y1', padT);
+    markerLine.setAttribute('x2', cx);
+    markerLine.setAttribute('y2', padT + plotH);
+    markerLine.setAttribute('stroke', '#5B8DEF');
+    markerLine.setAttribute('stroke-width', '1');
+    markerLine.setAttribute('opacity', '0.2');
+    markerLine.setAttribute('stroke-dasharray', '3 3');
+    g.appendChild(markerLine);
+
+    const dot = document.createElementNS(SVG_NS, 'circle');
+    dot.setAttribute('cx', cx);
+    dot.setAttribute('cy', cy);
+    dot.setAttribute('r', '4');
+    dot.setAttribute('fill', '#5B8DEF');
+    dot.setAttribute('stroke', '#0B0F1A');
+    dot.setAttribute('stroke-width', '1.5');
+    g.appendChild(dot);
+
+    const label = document.createElementNS(SVG_NS, 'text');
+    label.setAttribute('x', cx);
+    label.setAttribute('y', padT - 6);
+    label.setAttribute('text-anchor', 'middle');
+    label.setAttribute('fill', '#6B7585');
+    label.setAttribute('font-size', '9');
+    label.setAttribute('font-family', '-apple-system, BlinkMacSystemFont, sans-serif');
+    label.textContent = cp;
+    g.appendChild(label);
+
+    svg.appendChild(g);
+  }
+
   // Scrubber
   const scrubLine = document.createElementNS(SVG_NS, 'line');
   scrubLine.setAttribute('y1', padT);
@@ -360,7 +595,7 @@ function createLiveChart() {
   return { svg, addPoint };
 }
 
-function renderCheckpoints(checkpoints, activeStep) {
+function renderCheckpoints(checkpoints, activeStep, trainingLog) {
   const container = document.getElementById('checkpoint-container');
   const steps = Object.keys(checkpoints).map(Number).sort((a, b) => a - b);
 
@@ -368,9 +603,12 @@ function renderCheckpoints(checkpoints, activeStep) {
     const names = checkpoints[String(step)];
     const isActive = step <= activeStep;
     const isCurrent = step === steps.reduce((prev, s) => s <= activeStep ? s : prev, steps[0]);
+    const lossEntry = trainingLog ? trainingLog[step - 1] : null;
+    const lossStr = lossEntry ? `Loss: ${lossEntry.loss.toFixed(3)}` : '';
     return `
       <div class="checkpoint-card ${isCurrent ? 'active' : ''}" ${!isActive ? 'style="opacity:0.4"' : ''}>
         <div class="step-label">Step ${step}</div>
+        ${lossStr ? `<div class="loss-value">${lossStr}</div>` : ''}
         <div class="names">${names.join('\n')}</div>
       </div>
     `;
@@ -405,6 +643,7 @@ export function initTraining({ trainingLog, checkpoints, vocab, weights }, onWei
     sliderRow.style.display = 'flex';
 
     if (worker) { worker.terminate(); worker = null; }
+    if (filmstripTimer) { clearInterval(filmstripTimer); filmstripTimer = null; filmstripPlaying = false; }
 
     // Restore original weights when entering pretrained mode
     loadWeights(weights, vocabSize);
@@ -415,18 +654,28 @@ export function initTraining({ trainingLog, checkpoints, vocab, weights }, onWei
 
     set('trainingStep', 500);
     currentCheckpointStep = 500;
-    renderCheckpoints(checkpoints, 500);
+    activeFilmstripStep = 500;
+    renderCheckpoints(checkpoints, 500, trainingLog);
     updateScrubber(500);
 
     // Re-render weight inspector with pre-trained weights
     renderWeightInspector(getStateDict());
 
-    // Lazy-fetch checkpoint weights
+    const weightInspector = document.getElementById('weight-inspector');
+
+    // Lazy-fetch checkpoint weights, then render filmstrip
     if (!checkpointWeights) {
       fetch('/data/checkpoint-weights.json')
         .then(r => r.ok ? r.json() : null)
-        .then(data => { checkpointWeights = data; })
+        .then(data => {
+          checkpointWeights = data;
+          if (data && mode === 'pretrained') {
+            renderWeightFilmstrip(weightInspector, checkpointWeights, vocabSize);
+          }
+        })
         .catch(() => {});
+    } else {
+      renderWeightFilmstrip(weightInspector, checkpointWeights, vocabSize);
     }
 
     function updateScrubber(step) {
@@ -438,8 +687,23 @@ export function initTraining({ trainingLog, checkpoints, vocab, weights }, onWei
       document.getElementById('scrub-dot').setAttribute('cx', x);
       document.getElementById('scrub-dot').setAttribute('cy', y);
       stepValue.textContent = step;
-      renderCheckpoints(checkpoints, step);
+      renderCheckpoints(checkpoints, step, trainingLog);
     }
+
+    // Checkpoint marker clicks on SVG
+    svg.addEventListener('click', (e) => {
+      const marker = e.target.closest('.checkpoint-marker');
+      if (!marker || !checkpointWeights) return;
+      const step = parseInt(marker.dataset.step);
+      slider.value = step - 1;
+      set('trainingStep', step);
+      updateScrubber(step);
+      currentCheckpointStep = step;
+      activeFilmstripStep = step;
+      loadWeights(checkpointWeights[String(step)], vocabSize);
+      renderWeightFilmstrip(weightInspector, checkpointWeights, vocabSize);
+      set('weightsVersion', (get('weightsVersion') || 0) + 1);
+    });
 
     // Abort previous slider listener to prevent accumulation
     if (sliderController) sliderController.abort();
@@ -454,8 +718,9 @@ export function initTraining({ trainingLog, checkpoints, vocab, weights }, onWei
       const cp = nearestCheckpoint(step);
       if (cp !== currentCheckpointStep) {
         currentCheckpointStep = cp;
+        activeFilmstripStep = cp;
         loadWeights(checkpointWeights[String(cp)], vocabSize);
-        renderWeightInspector(getStateDict());
+        renderWeightFilmstrip(weightInspector, checkpointWeights, vocabSize);
         set('weightsVersion', (get('weightsVersion') || 0) + 1);
       }
     }, { signal: sliderController.signal });
@@ -470,7 +735,7 @@ export function initTraining({ trainingLog, checkpoints, vocab, weights }, onWei
     sliderRow.style.display = 'none';
     set('trainingStep', 0);
     liveCheckpoints = {};
-    renderCheckpoints({}, 0);
+    renderCheckpoints({}, 0, null);
 
     // Create live chart
     liveChart = createLiveChart();
@@ -506,7 +771,7 @@ export function initTraining({ trainingLog, checkpoints, vocab, weights }, onWei
             progressBar.style.width = `${(msg.step / 500) * 100}%`;
           } else if (msg.type === 'checkpoint') {
             liveCheckpoints[String(msg.step)] = msg.names;
-            renderCheckpoints(liveCheckpoints, msg.step);
+            renderCheckpoints(liveCheckpoints, msg.step, null);
           } else if (msg.type === 'checkpoint-weights') {
             loadWeights(Array.from(msg.weights), vocabSize);
             renderWeightInspector(getStateDict());
@@ -531,7 +796,11 @@ export function initTraining({ trainingLog, checkpoints, vocab, weights }, onWei
 
   // Re-render weight inspector labels on ELI5 toggle
   subscribe('eli5', () => {
-    renderWeightInspector(getStateDict());
+    if (mode === 'pretrained' && checkpointWeights) {
+      renderWeightFilmstrip(document.getElementById('weight-inspector'), checkpointWeights, vocabSize);
+    } else {
+      renderWeightInspector(getStateDict());
+    }
   });
 
   // Initialize with pre-trained view

@@ -4,7 +4,7 @@
  * Scroll position drives SVG block highlighting via IntersectionObserver.
  */
 
-import { gptForward, softmax, N_LAYER } from './gpt.js';
+import { gptForward, softmax, N_LAYER, getStateDict } from './gpt.js';
 import { get, set, subscribe } from './state.js';
 import { t } from './content.js';
 
@@ -48,6 +48,14 @@ const BLOCK_DETAILS = {
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 const HEAD_COLORS = ['var(--accent-blue)', 'var(--accent-purple)', 'var(--accent-green)', 'var(--accent-cyan)'];
+const HEAD_COLORS_HEX = ['#5B8DEF', '#9B7AEA', '#4ADE80', '#22D3EE'];
+
+let currentAttnMatrix = null; // Full attention matrix: [pos][head][targetPos] = weight
+let currentActiveHead = 'avg'; // Active head tab for heatmap
+
+function hexToRgb(hex) {
+  return `${parseInt(hex.slice(1, 3), 16)}, ${parseInt(hex.slice(3, 5), 16)}, ${parseInt(hex.slice(5, 7), 16)}`;
+}
 
 // --- Full microgpt.py source (embedded) ---
 const MICROGPT_SOURCE = `"""
@@ -458,25 +466,232 @@ function renderProbBars(probs, vocab) {
   return `<div class="arch-data-section"><span class="arch-data-label">Top 10 token probabilities</span><div class="arch-prob-bars">${rows}</div></div>`;
 }
 
-// Render attention weight summary (per-head bars)
-function renderAttnSummary(attnWeights, posId) {
-  if (!attnWeights || attnWeights.length === 0) return '';
-  const rows = attnWeights.map((weights, h) => {
-    const segments = weights.map((w, p) => {
-      const pct = (w * 100);
-      const label = pct >= 10 ? `<span class="arch-attn-pct">${Math.round(pct)}%</span>` : '';
-      return `<div class="arch-attn-weight" style="flex:${Math.max(w, 0.02)}" title="pos ${p}: ${pct.toFixed(1)}%"><div class="arch-attn-bar" style="background:${HEAD_COLORS[h]};opacity:${0.3 + w * 0.7}"></div>${label}</div>`;
+// Render attention heatmap (positions × positions grid, per-head or average)
+function renderAttnHeatmap(attnMatrix, vocab) {
+  if (!attnMatrix || attnMatrix.length === 0) return '';
+
+  const n = attnMatrix.length;
+  const head = currentActiveHead;
+
+  function getWeight(row, col) {
+    if (col > row) return null; // causal mask
+    if (head === 'avg') {
+      let sum = 0;
+      for (let h = 0; h < 4; h++) sum += attnMatrix[row][h][col];
+      return sum / 4;
+    }
+    return attnMatrix[row][parseInt(head)][col];
+  }
+
+  const headColor = head === 'avg' ? '#5B8DEF' : HEAD_COLORS_HEX[parseInt(head)];
+  const rgb = hexToRgb(headColor);
+
+  const tabs = `<div class="attn-heatmap-tabs toggle-group" role="group" aria-label="Attention head selector">
+    <button data-attn-head="avg" aria-pressed="${head === 'avg'}">Avg</button>
+    ${[0,1,2,3].map(h =>
+      `<button data-attn-head="${h}" aria-pressed="${head === String(h)}">H${h+1}</button>`
+    ).join('')}
+  </div>`;
+
+  const colHeaders = `<span class="attn-heatmap-corner"></span>` +
+    Array.from({length: n}, (_, c) =>
+      `<span class="attn-heatmap-col-label">${c}</span>`
+    ).join('');
+
+  const rows = Array.from({length: n}, (_, r) => {
+    const label = `<span class="attn-heatmap-row-label">${r}</span>`;
+    const cells = Array.from({length: n}, (_, c) => {
+      const w = getWeight(r, c);
+      if (w === null) return `<span class="attn-heatmap-cell masked"></span>`;
+      const pct = (w * 100).toFixed(1);
+      return `<span class="attn-heatmap-cell" data-row="${r}" data-col="${c}" title="pos ${r}\u2192${c}: ${pct}%" style="background: rgba(${rgb}, ${Math.max(0.06, w)})"></span>`;
     }).join('');
-    return `<div class="arch-attn-row"><span class="arch-attn-head" style="color:${HEAD_COLORS[h]}">H${h + 1}</span><div class="arch-attn-weights">${segments}</div></div>`;
+    return label + cells;
   }).join('');
-  return `<div class="arch-data-section"><span class="arch-data-label">Attention weights per head (positions 0–${posId})</span>${rows}</div>`;
+
+  return `<div class="arch-data-section attn-heatmap-container">
+    <span class="arch-data-label">Attention weights (${n}\u00d7${n}, causal)</span>
+    ${tabs}
+    <div class="attn-heatmap-grid" style="--grid-size: ${n}">${colHeaders}${rows}</div>
+  </div>`;
+}
+
+// Render Q/K/V derivation (collapsible, shows matrix multiplication visually)
+function renderAttnDerivation(intermediates) {
+  if (!intermediates || !intermediates.postNorm1) return '';
+
+  const input = intermediates.postNorm1;
+  const steps = [
+    { name: 'Q', label: 'Q = x \u00b7 W<sub>q</sub>', matrix: 'layer0.attn_wq', output: intermediates.q, desc: 'What am I looking for?' },
+    { name: 'K', label: 'K = x \u00b7 W<sub>k</sub>', matrix: 'layer0.attn_wk', output: intermediates.k, desc: 'What do I contain?' },
+    { name: 'V', label: 'V = x \u00b7 W<sub>v</sub>', matrix: 'layer0.attn_wv', output: intermediates.v, desc: 'What information do I carry?' },
+  ];
+
+  function miniBarHtml(values, height) {
+    const maxAbs = Math.max(...values.map(Math.abs), 0.001);
+    return `<div class="derivation-bars" style="height:${height}px">${values.map((v, i) => {
+      const h = (Math.abs(v) / maxAbs) * 100;
+      const cls = v >= 0 ? 'positive' : 'negative';
+      return `<div class="arch-bar ${cls}" title="[${i}] ${v.toFixed(4)}" style="height:${h}%"></div>`;
+    }).join('')}</div>`;
+  }
+
+  const stepsHtml = steps.map(s => `<div class="derivation-step">
+    <div class="derivation-label">${s.label}</div>
+    <div class="derivation-equation">
+      <div class="derivation-vec">
+        <span class="derivation-vec-label">x [16]</span>
+        ${miniBarHtml(input, 32)}
+      </div>
+      <span class="derivation-op">\u00d7</span>
+      <div class="derivation-matrix-wrap">
+        <canvas class="derivation-matrix" data-matrix="${s.matrix}" width="16" height="16"></canvas>
+        <span class="derivation-vec-label">16\u00d716</span>
+      </div>
+      <span class="derivation-op">=</span>
+      <div class="derivation-vec">
+        <span class="derivation-vec-label">${s.name} [16]</span>
+        ${miniBarHtml(s.output, 32)}
+      </div>
+    </div>
+    <p class="derivation-desc">${s.desc}</p>
+  </div>`).join('');
+
+  const scoresHtml = `<div class="derivation-step">
+    <div class="derivation-label">scores = Q\u00b7K<sup>T</sup> / \u221a${4} \u2192 softmax \u2192 weights</div>
+    <p class="derivation-desc">How much each position should influence the output</p>
+  </div>`;
+
+  return `<div class="arch-data-section derivation-container">
+    <div class="collapsible-header derivation-toggle" role="button" tabindex="0" aria-expanded="false">
+      <span class="arch-data-label">How attention is computed</span>
+      <span class="chevron" aria-hidden="true">&#9660;</span>
+    </div>
+    <div class="collapsible-content derivation-content">${stepsHtml}${scoresHtml}</div>
+  </div>`;
+}
+
+// Draw weight matrix heatmaps into canvas elements inside derivation
+function drawDerivationCanvases() {
+  const sd = getStateDict();
+  if (!sd) return;
+
+  document.querySelectorAll('.derivation-matrix').forEach(canvas => {
+    const matName = canvas.dataset.matrix;
+    const mat = sd[matName];
+    if (!mat) return;
+
+    const ctx = canvas.getContext('2d');
+    const rows = mat.length;
+    const cols = mat[0].length;
+
+    let absMax = 0;
+    for (const row of mat) for (const v of row) absMax = Math.max(absMax, Math.abs(v));
+    if (absMax === 0) absMax = 1;
+
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        const v = mat[r][c] / absMax;
+        if (v >= 0) {
+          ctx.fillStyle = `rgb(${15 + (1-v)*30}, ${23 + (1-v)*30}, ${80 + v*175})`;
+        } else {
+          const a = Math.abs(v);
+          ctx.fillStyle = `rgb(${80 + a*175}, ${23 + (1-a)*30}, ${15 + (1-a)*30})`;
+        }
+        ctx.fillRect(c, r, 1, 1);
+      }
+    }
+  });
+}
+
+// Draw attention arcs in architecture section (for current position)
+function drawArchAttnArcs() {
+  const section = document.querySelector('.arch-attn-arc-section');
+  if (!section) return;
+
+  const svg = section.querySelector('.arch-attn-arcs-svg');
+  if (!svg) return;
+  svg.innerHTML = '';
+
+  const posId = parseInt(section.dataset.pos);
+  if (posId === 0 || !currentAttnMatrix || posId >= currentAttnMatrix.length) {
+    svg.style.height = '0';
+    return;
+  }
+
+  const stepAttn = currentAttnMatrix[posId];
+  if (!stepAttn) return;
+
+  const buttons = section.querySelectorAll('.arch-attn-pos-btn');
+  if (buttons.length === 0) return;
+
+  const svgRect = svg.getBoundingClientRect();
+  const positions = Array.from(buttons).map(btn => {
+    const rect = btn.getBoundingClientRect();
+    return { cx: rect.left + rect.width / 2 - svgRect.left, top: rect.bottom - svgRect.top + 4 };
+  });
+
+  const head = currentActiveHead;
+  const singleHead = head !== 'avg';
+  const headList = singleHead ? [parseInt(head)] : [0, 1, 2, 3];
+
+  const arcs = [];
+  for (const h of headList) {
+    const weights = stepAttn[h];
+    if (!weights) continue;
+    for (let t = 0; t < weights.length; t++) {
+      if (t === posId) continue;
+      if (weights[t] < 0.01) continue;
+      arcs.push({ head: h, target: t, weight: weights[t] });
+    }
+  }
+
+  arcs.sort((a, b) => a.weight - b.weight);
+
+  const y = positions[0]?.top || 0;
+  let maxDepth = 0;
+
+  for (const arc of arcs) {
+    const srcPos = positions[posId];
+    const tgtPos = positions[arc.target];
+    if (!srcPos || !tgtPos) continue;
+
+    buttons[arc.target]?.classList.add('target');
+
+    const x1 = srcPos.cx;
+    const x2 = tgtPos.cx;
+    const dist = Math.abs(posId - arc.target);
+    const depth = y + 12 + dist * 18;
+    if (depth > maxDepth) maxDepth = depth;
+
+    const strokeWidth = 1.5 + arc.weight * 4.5;
+    const opacity = singleHead ? 0.3 + arc.weight * 0.65 : 0.2 + arc.weight * 0.5;
+
+    const path = document.createElementNS(SVG_NS, 'path');
+    path.setAttribute('d', `M ${x1},${y} Q ${(x1 + x2) / 2},${depth} ${x2},${y}`);
+    path.setAttribute('class', 'attn-arc');
+    path.setAttribute('stroke', HEAD_COLORS[arc.head]);
+    path.setAttribute('stroke-width', strokeWidth);
+    path.setAttribute('opacity', opacity);
+    svg.appendChild(path);
+  }
+
+  svg.style.height = maxDepth > 0 ? `${maxDepth + 8}px` : '0';
 }
 
 // Render all 11 narrative blocks into the narrative container
+function renderBreadcrumb(currentIndex) {
+  return '<div class="arch-breadcrumb">' + BLOCKS.map((block, i) => {
+    const cls = i === currentIndex ? 'arch-crumb active' : 'arch-crumb';
+    return `<span class="${cls}" style="--crumb-color: ${block.color}">${block.label}</span>`;
+  }).join('<span class="arch-crumb-sep" aria-hidden="true">›</span>') + '</div>';
+}
+
 function renderNarrativeBlocks(intermediates, vocab, attnWeights) {
   const container = document.getElementById('arch-narrative-container');
   container.innerHTML = BLOCKS.map((block, i) => {
     const html = [];
+    html.push(renderBreadcrumb(i));
     html.push(`<h3 class="arch-detail-title">${escHtml(t(block.id + '.title'))}</h3>`);
     html.push(`<p class="arch-detail-desc">${escHtml(t(block.id + '.desc'))}</p>`);
     html.push(renderCodeSnippet(block.lines[0], block.lines[1]));
@@ -497,9 +712,23 @@ function renderBlockData(blockIndex, intermediates, vocab, attnWeights) {
     const values = intermediates[key];
     return values ? renderDataBars(values, label) : '';
   }).join('');
-  if (block.id === 'attention' && attnWeights) {
-    const posId = parseInt(document.getElementById('arch-pos-select').value);
-    html += renderAttnSummary(attnWeights, posId);
+  if (block.id === 'attention') {
+    if (currentAttnMatrix) html += renderAttnHeatmap(currentAttnMatrix, vocab);
+
+    // Attention arcs (when position > 0)
+    const posId = parseInt(document.getElementById('arch-pos-select')?.value || '0');
+    if (posId > 0 && currentAttnMatrix && currentAttnMatrix.length > posId) {
+      const posButtons = Array.from({length: posId + 1}, (_, i) =>
+        `<button class="arch-attn-pos-btn attn-token${i === posId ? ' selected' : ''}" data-pos="${i}">${i}</button>`
+      ).join('');
+      html += `<div class="arch-data-section arch-attn-arc-section" data-pos="${posId}">
+        <span class="arch-data-label">Attention flow (position ${posId})</span>
+        <div class="arch-attn-tokens attn-token-row">${posButtons}</div>
+        <svg class="arch-attn-arcs-svg attn-arcs-svg" aria-label="Attention arcs"></svg>
+      </div>`;
+    }
+
+    html += renderAttnDerivation(intermediates);
   }
   return html;
 }
@@ -511,6 +740,8 @@ function updateNarrativeData(intermediates, vocab, attnWeights) {
     const dataEl = el.querySelector('.arch-narrative-data');
     if (dataEl) dataEl.innerHTML = renderBlockData(i, intermediates, vocab, attnWeights);
   });
+  drawDerivationCanvases();
+  drawArchAttnArcs();
 }
 
 // Render step dots navigation
@@ -550,11 +781,11 @@ function updateBlockStates(svg, currentIndex) {
   });
 }
 
-// Create architecture SVG
+// Create architecture SVG (blocks contain mini-viz, connectors support flow animation)
 function createSVG() {
   const blockW = 200;
   const blockWWide = 260;
-  const blockH = 44;
+  const blockH = 70;
   const gap = 16;
   const padX = 60;
   const padY = 30;
@@ -571,22 +802,40 @@ function createSVG() {
 
   const centerX = totalW / 2 - 30;
 
+  // SVG layers: connectors (back), blocks (middle), flow dots (front)
+  const connectorLayer = document.createElementNS(SVG_NS, 'g');
+  const blockLayer = document.createElementNS(SVG_NS, 'g');
+  const dotLayer = document.createElementNS(SVG_NS, 'g');
+
   BLOCKS.forEach((block, i) => {
     const y = padY + i * (blockH + gap);
     const w = block.wide ? blockWWide : blockW;
     const x = centerX - w / 2;
 
-    // Connection line
+    // Connection path (supports flow dot animation)
     if (i < BLOCKS.length - 1) {
-      const line = document.createElementNS(SVG_NS, 'line');
-      line.setAttribute('x1', centerX);
-      line.setAttribute('y1', y + blockH);
-      line.setAttribute('x2', centerX);
-      line.setAttribute('y2', y + blockH + gap);
-      line.setAttribute('stroke', '#2A3140');
-      line.setAttribute('stroke-width', '2');
-      line.setAttribute('stroke-dasharray', '4 3');
-      svg.appendChild(line);
+      const y1 = y + blockH;
+      const y2 = y + blockH + gap;
+
+      const path = document.createElementNS(SVG_NS, 'path');
+      path.setAttribute('d', `M${centerX},${y1} L${centerX},${y2}`);
+      path.setAttribute('stroke', '#2A3140');
+      path.setAttribute('stroke-width', '2');
+      path.setAttribute('stroke-dasharray', '4 3');
+      path.setAttribute('fill', 'none');
+      path.setAttribute('class', 'connector-path');
+      path.setAttribute('data-from', i);
+      connectorLayer.appendChild(path);
+
+      // Flow dot (animated during forward pass)
+      const dot = document.createElementNS(SVG_NS, 'circle');
+      dot.setAttribute('r', '4');
+      dot.setAttribute('cx', centerX);
+      dot.setAttribute('cy', y1);
+      dot.setAttribute('fill', block.color);
+      dot.setAttribute('class', 'flow-dot');
+      dot.setAttribute('data-from', i);
+      dotLayer.appendChild(dot);
     }
 
     // Block group
@@ -598,7 +847,6 @@ function createSVG() {
     g.setAttribute('tabindex', '0');
     g.setAttribute('aria-label', `${block.label}: ${block.dimOut}`);
 
-    // SVG tooltip
     const titleEl = document.createElementNS(SVG_NS, 'title');
     titleEl.textContent = t(block.id + '.tooltip');
     g.appendChild(titleEl);
@@ -614,9 +862,10 @@ function createSVG() {
     rect.setAttribute('stroke-width', '1.5');
     g.appendChild(rect);
 
+    // Label text (upper portion of block)
     const text = document.createElementNS(SVG_NS, 'text');
     text.setAttribute('x', centerX);
-    text.setAttribute('y', y + blockH / 2 + 1);
+    text.setAttribute('y', y + 20);
     text.setAttribute('text-anchor', 'middle');
     text.setAttribute('dominant-baseline', 'middle');
     text.setAttribute('fill', '#E8ECF1');
@@ -626,19 +875,258 @@ function createSVG() {
     text.textContent = block.label;
     g.appendChild(text);
 
-    // Dimension label on right
+    // Dimension label (aligned with block label)
     const dimText = document.createElementNS(SVG_NS, 'text');
     dimText.setAttribute('x', x + w + 12);
-    dimText.setAttribute('y', y + blockH / 2 + 1);
+    dimText.setAttribute('y', y + 20);
     dimText.setAttribute('dominant-baseline', 'middle');
     dimText.setAttribute('class', 'dim-label');
     dimText.textContent = block.dimOut;
     g.appendChild(dimText);
 
-    svg.appendChild(g);
+    // Expand chevron (visible on hover)
+    const chevron = document.createElementNS(SVG_NS, 'path');
+    const chevX = x + w - 16;
+    const chevY = y + 20;
+    chevron.setAttribute('d', `M${chevX - 3},${chevY - 4} L${chevX + 2},${chevY} L${chevX - 3},${chevY + 4}`);
+    chevron.setAttribute('stroke', '#E8ECF1');
+    chevron.setAttribute('stroke-width', '1.5');
+    chevron.setAttribute('fill', 'none');
+    chevron.setAttribute('stroke-linecap', 'round');
+    chevron.setAttribute('stroke-linejoin', 'round');
+    chevron.setAttribute('class', 'expand-icon');
+    g.appendChild(chevron);
+
+    // Mini-viz group (populated by updateMiniViz)
+    const vizG = document.createElementNS(SVG_NS, 'g');
+    vizG.setAttribute('class', 'mini-viz');
+    g.appendChild(vizG);
+
+    blockLayer.appendChild(g);
   });
 
+  svg.appendChild(connectorLayer);
+  svg.appendChild(blockLayer);
+  svg.appendChild(dotLayer);
+
   return svg;
+}
+
+// --- Mini-viz: live data previews inside SVG blocks ---
+
+const MINI_VIZ_KEY = {
+  'tok-embed': 'tokEmb',
+  'pos-embed': 'combined',
+  'rmsnorm0': 'postNorm0',
+  'rmsnorm1': 'postNorm1',
+  'attention': null,
+  'residual1': 'postResidual1',
+  'rmsnorm2': 'postNorm2',
+  'mlp': 'mlpActivated',
+  'residual2': 'postResidual2',
+  'lm-head': 'logits',
+  'softmax': null,
+};
+
+function updateMiniViz(svg, intermediates, vocab) {
+  if (!intermediates) return;
+
+  svg.querySelectorAll('.arch-block').forEach((g, i) => {
+    const block = BLOCKS[i];
+    const vizG = g.querySelector('.mini-viz');
+    while (vizG.firstChild) vizG.removeChild(vizG.firstChild);
+
+    const rect = g.querySelector('rect');
+    const bx = parseFloat(rect.getAttribute('x'));
+    const by = parseFloat(rect.getAttribute('y'));
+    const bw = parseFloat(rect.getAttribute('width'));
+
+    const vizX = bx + 12;
+    const vizY = by + 38;
+    const vizW = bw - 24;
+    const vizH = 22;
+
+    if (block.id === 'softmax') {
+      renderMiniProbs(vizG, intermediates.probs, vocab, vizX, vizY, vizW, vizH);
+    } else if (block.id === 'attention') {
+      renderMiniAttnDots(vizG, intermediates, vizX, vizY, vizW, vizH);
+    } else {
+      const key = MINI_VIZ_KEY[block.id];
+      const data = key ? intermediates[key] : null;
+      if (data) renderMiniSparkline(vizG, data, block.color, vizX, vizY, vizW, vizH);
+    }
+  });
+}
+
+function renderMiniSparkline(g, values, color, x, y, width, height) {
+  const n = values.length;
+  const barGap = width / n;
+  const barW = Math.max(1, barGap - 0.5);
+  const maxAbs = Math.max(...values.map(Math.abs), 0.001);
+
+  for (let i = 0; i < n; i++) {
+    const v = values[i];
+    const h = (Math.abs(v) / maxAbs) * height;
+    const bar = document.createElementNS(SVG_NS, 'rect');
+    bar.setAttribute('x', x + i * barGap);
+    bar.setAttribute('y', y + height - h);
+    bar.setAttribute('width', barW);
+    bar.setAttribute('height', Math.max(0.5, h));
+    bar.setAttribute('fill', v >= 0 ? '#5B8DEF' : '#FB923C');
+    bar.setAttribute('opacity', '0.7');
+    bar.setAttribute('rx', '0.5');
+    g.appendChild(bar);
+  }
+}
+
+function renderMiniProbs(g, probs, vocab, x, y, width, height) {
+  if (!probs) return;
+  const chars = vocab.chars;
+  const indexed = probs.map((p, i) => ({ p, i })).sort((a, b) => b.p - a.p);
+  const top3 = indexed.slice(0, 3);
+  const maxP = top3[0].p;
+
+  const barH = Math.floor((height - 4) / 3);
+  const labelW = 16;
+  const barAreaW = width - labelW - 4;
+
+  top3.forEach(({ p, i: tokenIdx }, j) => {
+    const barY = y + j * (barH + 2);
+    const label = tokenIdx === vocab.bos ? '\u2297' : chars[tokenIdx];
+
+    const text = document.createElementNS(SVG_NS, 'text');
+    text.setAttribute('x', x + labelW / 2);
+    text.setAttribute('y', barY + barH / 2 + 1);
+    text.setAttribute('text-anchor', 'middle');
+    text.setAttribute('dominant-baseline', 'middle');
+    text.setAttribute('fill', '#A0AAB8');
+    text.setAttribute('font-size', '8');
+    text.setAttribute('font-family', '-apple-system, BlinkMacSystemFont, sans-serif');
+    text.textContent = label;
+    g.appendChild(text);
+
+    const bgRect = document.createElementNS(SVG_NS, 'rect');
+    bgRect.setAttribute('x', x + labelW + 2);
+    bgRect.setAttribute('y', barY);
+    bgRect.setAttribute('width', barAreaW);
+    bgRect.setAttribute('height', barH);
+    bgRect.setAttribute('fill', 'rgba(0,0,0,0.15)');
+    bgRect.setAttribute('rx', '1.5');
+    g.appendChild(bgRect);
+
+    const fillRect = document.createElementNS(SVG_NS, 'rect');
+    fillRect.setAttribute('x', x + labelW + 2);
+    fillRect.setAttribute('y', barY);
+    fillRect.setAttribute('width', (p / maxP) * barAreaW);
+    fillRect.setAttribute('height', barH);
+    fillRect.setAttribute('fill', '#4ADE80');
+    fillRect.setAttribute('opacity', '0.7');
+    fillRect.setAttribute('rx', '1.5');
+    g.appendChild(fillRect);
+  });
+}
+
+function renderMiniAttnDots(g, intermediates, x, y, width, height) {
+  const attnLogits = intermediates.attnLogits;
+  if (!attnLogits) return;
+
+  const dotR = 5;
+  const spacing = width / 5;
+
+  for (let h = 0; h < 4; h++) {
+    const headLogits = attnLogits[h];
+    if (!headLogits || headLogits.length === 0) continue;
+
+    // Softmax to get attention weights
+    const maxL = Math.max(...headLogits);
+    const exps = headLogits.map(l => Math.exp(l - maxL));
+    const sum = exps.reduce((a, b) => a + b, 0);
+    const weights = exps.map(e => e / sum);
+
+    // Normalized entropy (0 = fully focused, 1 = uniform)
+    const entropy = -weights.reduce((acc, w) => acc + (w > 0 ? w * Math.log2(w) : 0), 0);
+    const maxEntropy = Math.log2(weights.length);
+    const norm = maxEntropy > 0 ? entropy / maxEntropy : 0;
+
+    const cx = x + (h + 1) * spacing;
+    const cy = y + height / 2;
+
+    const bg = document.createElementNS(SVG_NS, 'circle');
+    bg.setAttribute('cx', cx);
+    bg.setAttribute('cy', cy);
+    bg.setAttribute('r', dotR + 2);
+    bg.setAttribute('fill', 'rgba(0,0,0,0.2)');
+    g.appendChild(bg);
+
+    const circle = document.createElementNS(SVG_NS, 'circle');
+    circle.setAttribute('cx', cx);
+    circle.setAttribute('cy', cy);
+    circle.setAttribute('r', dotR);
+    circle.setAttribute('fill', HEAD_COLORS_HEX[h]);
+    circle.setAttribute('opacity', String(0.4 + (1 - norm) * 0.6));
+    g.appendChild(circle);
+
+    const label = document.createElementNS(SVG_NS, 'text');
+    label.setAttribute('x', cx);
+    label.setAttribute('y', cy + 0.5);
+    label.setAttribute('text-anchor', 'middle');
+    label.setAttribute('dominant-baseline', 'middle');
+    label.setAttribute('fill', 'white');
+    label.setAttribute('font-size', '7');
+    label.setAttribute('font-weight', '600');
+    label.setAttribute('font-family', '-apple-system, BlinkMacSystemFont, sans-serif');
+    label.textContent = String(h + 1);
+    g.appendChild(label);
+  }
+}
+
+// --- Flow dot animation along connectors ---
+
+function animateFlowDot(svg, fromIndex, duration) {
+  const dot = svg.querySelector(`.flow-dot[data-from="${fromIndex}"]`);
+  const path = svg.querySelector(`.connector-path[data-from="${fromIndex}"]`);
+  if (!dot || !path) return;
+
+  const d = path.getAttribute('d');
+  const m = d.match(/M([\d.]+),([\d.]+)\s*L[\d.]+,([\d.]+)/);
+  if (!m) return;
+
+  const startY = parseFloat(m[2]);
+  const endY = parseFloat(m[3]);
+
+  dot.style.transition = 'none';
+  dot.style.opacity = '0.9';
+  dot.setAttribute('cy', String(startY));
+
+  const t0 = performance.now();
+  function step(now) {
+    const p = Math.min((now - t0) / duration, 1);
+    const eased = p * (2 - p); // ease-out quad
+    dot.setAttribute('cy', String(startY + (endY - startY) * eased));
+    if (p < 1) {
+      requestAnimationFrame(step);
+    } else {
+      dot.style.transition = 'opacity 0.15s';
+      dot.style.opacity = '0';
+    }
+  }
+  requestAnimationFrame(step);
+}
+
+function flashConnectors(svg) {
+  svg.querySelectorAll('.connector-path').forEach((path, i) => {
+    const block = BLOCKS[i];
+    setTimeout(() => {
+      path.setAttribute('stroke', block.color);
+      path.setAttribute('stroke-width', '3');
+      path.setAttribute('stroke-dasharray', 'none');
+      setTimeout(() => {
+        path.setAttribute('stroke', '#2A3140');
+        path.setAttribute('stroke-width', '2');
+        path.setAttribute('stroke-dasharray', '4 3');
+      }, 100);
+    }, i * 40);
+  });
 }
 
 let cleanupSubs = [];
@@ -650,6 +1138,7 @@ export function initArchitecture({ vocab }) {
 
   const container = document.getElementById('arch-svg-container');
   const narrativeContainer = document.getElementById('arch-narrative-container');
+  const tokenInput = document.getElementById('arch-token-input');
   const tokenSelect = document.getElementById('arch-token-select');
   const posSelect = document.getElementById('arch-pos-select');
   const btnRun = document.getElementById('btn-run-forward');
@@ -675,19 +1164,30 @@ export function initArchitecture({ vocab }) {
   let currentAttnWeights = null;
   let currentIndex = 0;
 
-  // Compute a forward pass and return intermediates
+  // Compute multi-step forward pass (fills KV cache for proper attention context)
   function computeForwardPass() {
     const tokenId = parseInt(tokenSelect.value);
     const posId = parseInt(posSelect.value);
     const keys = Array.from({ length: N_LAYER }, () => []);
     const values = Array.from({ length: N_LAYER }, () => []);
-    const result = gptForward(tokenId, posId, keys, values, { intermediates: true });
-    currentIntermediates = result.intermediates;
-    currentIntermediates.probs = Array.from(softmax(result.logits));
-    currentAttnWeights = result.attentionWeights;
+
+    // Run forward pass for all positions up to posId to build KV cache
+    currentAttnMatrix = [];
+    for (let p = 0; p <= posId; p++) {
+      const opts = p === posId ? { intermediates: true } : {};
+      const result = gptForward(tokenId, p, keys, values, opts);
+      currentAttnMatrix.push(result.attentionWeights);
+      if (p === posId) {
+        currentIntermediates = result.intermediates;
+        currentIntermediates.probs = Array.from(softmax(result.logits));
+        currentAttnWeights = result.attentionWeights;
+      }
+    }
   }
 
   // Highlight a block by index (updates SVG, dots, source, active narrative)
+  const progressFill = document.getElementById('arch-progress-fill');
+
   function highlightBlock(index) {
     currentIndex = index;
     set('currentBlock', index);
@@ -702,6 +1202,11 @@ export function initArchitecture({ vocab }) {
     // Update button states
     btnBack.disabled = currentIndex === 0;
     btnNext.disabled = currentIndex === BLOCKS.length - 1;
+
+    // Update progress bar
+    const pct = ((currentIndex + 1) / BLOCKS.length) * 100;
+    progressFill.style.width = `${pct}%`;
+    progressFill.style.backgroundColor = BLOCKS[currentIndex].color;
 
     // Update active narrative block
     narrativeContainer.querySelectorAll('.arch-narrative').forEach((el, i) => {
@@ -744,6 +1249,17 @@ export function initArchitecture({ vocab }) {
   btnRun.addEventListener('click', () => {
     computeForwardPass();
     updateNarrativeData(currentIntermediates, vocab, currentAttnWeights);
+    updateMiniViz(svg, currentIntermediates, vocab);
+
+    // Animate flow along connectors
+    const rm = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (rm) {
+      flashConnectors(svg);
+    } else {
+      for (let j = 0; j < BLOCKS.length - 1; j++) {
+        setTimeout(() => animateFlowDot(svg, j, 100), j * 80);
+      }
+    }
 
     // Flash data sections
     narrativeContainer.querySelectorAll('.arch-narrative-data').forEach(el => {
@@ -768,14 +1284,43 @@ export function initArchitecture({ vocab }) {
   // Context indicator element
   const genContext = document.getElementById('arch-gen-context');
 
+  // Inline token typing
+  tokenInput.addEventListener('input', () => {
+    const ch = tokenInput.value;
+    if (ch === '') return;
+    const idx = chars.indexOf(ch);
+    if (idx >= 0) {
+      tokenInput.classList.remove('invalid');
+      tokenSelect.value = String(idx);
+      set('token', idx);
+      genContext.hidden = true;
+      computeForwardPass();
+      updateNarrativeData(currentIntermediates, vocab, currentAttnWeights);
+      updateMiniViz(svg, currentIntermediates, vocab);
+    } else {
+      tokenInput.classList.add('invalid');
+    }
+  });
+
   // Auto-update on input change (clear gen context on manual changes)
   tokenSelect.addEventListener('change', () => {
     if (!externalUpdate) {
       set('token', parseInt(tokenSelect.value));
       genContext.hidden = true;
+      // Sync text input
+      const tokenId = parseInt(tokenSelect.value);
+      if (tokenId === vocab.bos) {
+        tokenInput.value = '';
+        tokenInput.placeholder = 'BOS';
+      } else {
+        tokenInput.value = chars[tokenId];
+        tokenInput.placeholder = chars[tokenId];
+      }
+      tokenInput.classList.remove('invalid');
     }
     computeForwardPass();
     updateNarrativeData(currentIntermediates, vocab, currentAttnWeights);
+    updateMiniViz(svg, currentIntermediates, vocab);
   });
   posSelect.addEventListener('change', () => {
     if (!externalUpdate) {
@@ -784,6 +1329,7 @@ export function initArchitecture({ vocab }) {
     }
     computeForwardPass();
     updateNarrativeData(currentIntermediates, vocab, currentAttnWeights);
+    updateMiniViz(svg, currentIntermediates, vocab);
   });
 
   // SVG block click → scroll to narrative
@@ -816,6 +1362,15 @@ export function initArchitecture({ vocab }) {
     if (val == null) return;
     externalUpdate = true;
     tokenSelect.value = String(val);
+    // Sync text input
+    if (val === vocab.bos) {
+      tokenInput.value = '';
+      tokenInput.placeholder = 'BOS';
+    } else {
+      tokenInput.value = chars[val];
+      tokenInput.placeholder = chars[val];
+    }
+    tokenInput.classList.remove('invalid');
     tokenSelect.dispatchEvent(new Event('change'));
     externalUpdate = false;
   }));
@@ -835,6 +1390,13 @@ export function initArchitecture({ vocab }) {
 
   // Run initial forward pass
   tokenSelect.value = String(useToken);
+  if (useToken === vocab.bos) {
+    tokenInput.value = '';
+    tokenInput.placeholder = 'BOS';
+  } else {
+    tokenInput.value = chars[useToken] || '';
+    tokenInput.placeholder = chars[useToken] || 'a';
+  }
   set('token', useToken);
   set('position', usePos);
   set('currentBlock', 0);
@@ -842,6 +1404,13 @@ export function initArchitecture({ vocab }) {
 
   // Render all narrative blocks with data
   renderNarrativeBlocks(currentIntermediates, vocab, currentAttnWeights);
+
+  // Populate mini-viz in SVG blocks
+  updateMiniViz(svg, currentIntermediates, vocab);
+
+  // Draw weight matrix canvases and attention arcs
+  drawDerivationCanvases();
+  drawArchAttnArcs();
 
   // Set up scroll observer — highlights block when it enters top 40% of viewport
   let scrollObserver = null;
@@ -859,6 +1428,31 @@ export function initArchitecture({ vocab }) {
     });
   }
   setupScrollObserver();
+
+  // Heatmap head tab switching + derivation toggle (event delegation)
+  narrativeContainer.addEventListener('click', (e) => {
+    // Head tab switching
+    const tab = e.target.closest('[data-attn-head]');
+    if (tab) {
+      currentActiveHead = tab.dataset.attnHead;
+      const attnDataEl = narrativeContainer.querySelector('[data-block-index="4"] .arch-narrative-data');
+      if (attnDataEl) {
+        attnDataEl.innerHTML = renderBlockData(4, currentIntermediates, vocab, currentAttnWeights);
+        drawDerivationCanvases();
+        drawArchAttnArcs();
+      }
+      return;
+    }
+
+    // Derivation collapsible toggle
+    const toggle = e.target.closest('.derivation-toggle');
+    if (toggle) {
+      const content = toggle.nextElementSibling;
+      const isOpen = content.classList.toggle('open');
+      toggle.setAttribute('aria-expanded', isOpen);
+      if (isOpen) drawDerivationCanvases();
+    }
+  });
 
   // ELI5 mode: update tooltips in-place, re-render narrative blocks
   cleanupSubs.push(subscribe('eli5', () => {
@@ -884,8 +1478,11 @@ export function initArchitecture({ vocab }) {
       highlightBlock(i);
       const el = narrativeContainer.querySelector(`[data-block-index="${i}"]`);
       if (el) el.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'nearest' });
-      if (stepDelay > 0 && i < BLOCKS.length - 1) {
-        await new Promise(r => setTimeout(r, stepDelay));
+      if (i < BLOCKS.length - 1) {
+        if (stepDelay > 0) {
+          animateFlowDot(svg, i, stepDelay);
+          await new Promise(r => setTimeout(r, stepDelay));
+        }
       }
     }
     animating = false;

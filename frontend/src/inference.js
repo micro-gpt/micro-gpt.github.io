@@ -25,6 +25,7 @@ let storedTokens = [];
 let selectedTokenIdx = -1;
 let activeHead = 'all';
 let storedVocab = null;
+let lastLogits = null;
 
 function renderBars(containerId, vocab) {
   const container = document.getElementById(containerId);
@@ -310,6 +311,7 @@ async function generate(vocab, temperature) {
     storedAttn.push(attentionWeights);
     selectedTokenIdx = pos;
 
+    lastLogits = Array.from(logits);
     updateProbBars('logit-bars-container', logits, -1, 'logit');
 
     const scaled = logits.map(l => l / temperature);
@@ -375,15 +377,41 @@ export function initInference({ vocab }) {
 
   set('temperature', 0.5);
 
+  const tempPreview = document.getElementById('temp-preview');
+
+  function updateTempPreview(temp) {
+    if (!lastLogits) {
+      tempPreview.innerHTML = '';
+      return;
+    }
+    const scaled = lastLogits.map(l => l / temp);
+    const probs = softmax(scaled);
+
+    // Sort by probability for display
+    const indexed = Array.from(probs).map((p, i) => ({ p, i }));
+    indexed.sort((a, b) => b.p - a.p);
+
+    if (tempPreview.children.length !== probs.length) {
+      tempPreview.innerHTML = indexed.map(() => '<div class="temp-preview-bar"></div>').join('');
+    }
+    const bars = tempPreview.children;
+    for (let j = 0; j < indexed.length; j++) {
+      const pct = indexed[j].p * 100;
+      bars[j].style.height = `${Math.max(1, pct)}%`;
+    }
+  }
+
   tempSlider.addEventListener('input', () => {
     const temp = parseInt(tempSlider.value) / 10;
     set('temperature', temp);
     tempValue.textContent = temp.toFixed(1);
+    updateTempPreview(temp);
   });
 
-  btnGenerate.addEventListener('click', () => {
+  btnGenerate.addEventListener('click', async () => {
     const temp = parseInt(tempSlider.value) / 10;
-    generate(vocab, temp);
+    await generate(vocab, temp);
+    updateTempPreview(temp);
   });
 
   // Head selector toggle

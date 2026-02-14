@@ -1341,6 +1341,400 @@
       z-index: 1;
     }
 
+    /* Attention heatmap */
+    .attn-heatmap-grid {
+      display: grid;
+      grid-template-columns: auto repeat(var(--grid-size), 1fr);
+      gap: 2px;
+      margin-top: 0.5rem;
+    }
+
+    .attn-heatmap-cell {
+      aspect-ratio: 1;
+      border-radius: 2px;
+      min-height: 20px;
+      cursor: crosshair;
+    }
+
+    .attn-heatmap-cell:hover:not(.masked) {
+      outline: 2px solid var(--text-primary);
+      outline-offset: -1px;
+      z-index: 1;
+    }
+
+    .attn-heatmap-cell.masked {
+      cursor: default;
+    }
+
+    .attn-heatmap-row-label,
+    .attn-heatmap-col-label,
+    .attn-heatmap-corner {
+      font-family: var(--font-mono);
+      font-size: 0.7rem;
+      color: var(--text-dim);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .attn-heatmap-tabs {
+      margin-bottom: 0.5rem;
+    }
+
+    .attn-heatmap-tabs button[data-attn-head="0"][aria-pressed="true"] { background: var(--accent-blue); }
+    .attn-heatmap-tabs button[data-attn-head="1"][aria-pressed="true"] { background: var(--accent-purple); }
+    .attn-heatmap-tabs button[data-attn-head="2"][aria-pressed="true"] { background: var(--accent-green); }
+    .attn-heatmap-tabs button[data-attn-head="3"][aria-pressed="true"] { background: var(--accent-cyan); }
+
+    /* Q/K/V derivation */
+    .derivation-step {
+      margin-bottom: 1rem;
+    }
+
+    .derivation-label {
+      font-family: var(--font-mono);
+      font-size: 0.8rem;
+      color: var(--text-secondary);
+      font-weight: 600;
+      margin-bottom: 0.25rem;
+    }
+
+    .derivation-equation {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      margin: 0.25rem 0;
+    }
+
+    .derivation-vec {
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
+      min-width: 0;
+      flex: 1;
+    }
+
+    .derivation-vec-label {
+      font-family: var(--font-mono);
+      font-size: 0.65rem;
+      color: var(--text-dim);
+    }
+
+    .derivation-bars {
+      display: flex;
+      align-items: flex-end;
+      gap: 1px;
+      background: rgba(0, 0, 0, 0.15);
+      border-radius: var(--radius-sm);
+      padding: 2px 1px;
+    }
+
+    .derivation-op {
+      font-family: var(--font-mono);
+      font-size: 0.9rem;
+      color: var(--text-muted);
+      flex-shrink: 0;
+    }
+
+    .derivation-matrix-wrap {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.25rem;
+      flex-shrink: 0;
+    }
+
+    .derivation-matrix {
+      width: 64px;
+      height: 64px;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--glass-border);
+      image-rendering: pixelated;
+    }
+
+    .derivation-desc {
+      font-size: 0.8rem;
+      color: var(--text-dim);
+      font-style: italic;
+    }
+
+    .derivation-toggle {
+      padding: 0.375rem 0;
+    }
+
+    /* Architecture progress bar */
+    .arch-progress {
+      height: 3px;
+      background: var(--bg-tertiary);
+      border-radius: 2px;
+      margin-bottom: 1rem;
+      overflow: hidden;
+    }
+
+    .arch-progress-fill {
+      height: 100%;
+      border-radius: 2px;
+      transition: width var(--transition-normal), background-color var(--transition-normal);
+      width: 0%;
+    }
+
+    /* Architecture breadcrumb path */
+    .arch-breadcrumb {
+      display: flex;
+      align-items: center;
+      gap: 0.25rem;
+      flex-wrap: wrap;
+      margin-bottom: 0.75rem;
+      font-size: 0.65rem;
+      line-height: 1.6;
+    }
+
+    .arch-crumb {
+      color: var(--text-dim);
+      white-space: nowrap;
+    }
+
+    .arch-crumb.active {
+      color: var(--crumb-color, var(--text-secondary));
+      font-weight: 600;
+    }
+
+    .arch-crumb-sep {
+      color: var(--text-dim);
+      opacity: 0.4;
+      font-size: 0.7rem;
+    }
+
+    /* Mini-viz inside SVG architecture blocks */
+    .mini-viz {
+      pointer-events: none;
+    }
+
+    .expand-icon {
+      opacity: 0;
+      transition: opacity var(--transition-fast);
+    }
+
+    .arch-block:hover .expand-icon {
+      opacity: 0.5;
+    }
+
+    .flow-dot {
+      pointer-events: none;
+    }
+
+    /* Weight filmstrip */
+    .weight-filmstrip {
+      margin-bottom: 1rem;
+    }
+
+    .filmstrip-controls {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      margin-bottom: 0.75rem;
+    }
+
+    .filmstrip-play {
+      width: 44px;
+      height: 44px;
+      background: var(--bg-tertiary);
+      border: 1px solid var(--glass-border);
+      border-radius: var(--radius-md);
+      color: var(--text-secondary);
+      font-size: 1rem;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all var(--transition-fast);
+      flex-shrink: 0;
+    }
+
+    .filmstrip-play:hover {
+      background: var(--bg-quaternary);
+      color: var(--text-primary);
+    }
+
+    .filmstrip-play[aria-pressed="true"] {
+      background: var(--accent);
+      color: white;
+      border-color: var(--accent);
+    }
+
+    .filmstrip-step-btns {
+      display: flex;
+      gap: 2px;
+      flex-wrap: wrap;
+    }
+
+    .filmstrip-step-btn {
+      padding: 0.25rem 0.5rem;
+      min-height: 44px;
+      min-width: 44px;
+      background: var(--bg-tertiary);
+      border: 1px solid var(--glass-border);
+      border-radius: var(--radius-sm);
+      color: var(--text-muted);
+      font-family: var(--font-mono);
+      font-size: 0.7rem;
+      cursor: pointer;
+      transition: all var(--transition-fast);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .filmstrip-step-btn:hover {
+      background: var(--bg-quaternary);
+      color: var(--text-secondary);
+    }
+
+    .filmstrip-step-btn.active {
+      background: var(--accent-subtle);
+      border-color: var(--accent);
+      color: var(--accent-hover);
+    }
+
+    .filmstrip-matrix-label {
+      font-family: var(--font-mono);
+      font-size: 0.7rem;
+      color: var(--text-dim);
+      text-align: center;
+      margin-bottom: 0.25rem;
+    }
+
+    .filmstrip-canvases {
+      display: flex;
+      gap: 0.5rem;
+      overflow-x: auto;
+      padding-bottom: 0.25rem;
+      scrollbar-width: thin;
+    }
+
+    .filmstrip-frame {
+      flex-shrink: 0;
+      text-align: center;
+    }
+
+    .filmstrip-frame canvas {
+      width: 100%;
+      max-width: 120px;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--glass-border);
+      image-rendering: pixelated;
+      transition: border-color var(--transition-fast);
+    }
+
+    .filmstrip-frame.active canvas {
+      border-color: var(--accent);
+      box-shadow: 0 0 8px rgba(91, 141, 239, 0.3);
+    }
+
+    .filmstrip-frame-label {
+      font-family: var(--font-mono);
+      font-size: 0.65rem;
+      color: var(--text-dim);
+      margin-top: 0.125rem;
+    }
+
+    .filmstrip-frame.active .filmstrip-frame-label {
+      color: var(--accent-hover);
+    }
+
+    /* Diff overlay toggle */
+    .filmstrip-diff-toggle {
+      margin-left: auto;
+      padding: 0.25rem 0.5rem;
+      min-height: 44px;
+      background: var(--bg-tertiary);
+      border: 1px solid var(--glass-border);
+      border-radius: var(--radius-sm);
+      color: var(--text-muted);
+      font-family: var(--font-sans);
+      font-size: 0.75rem;
+      cursor: pointer;
+      transition: all var(--transition-fast);
+    }
+
+    .filmstrip-diff-toggle:hover {
+      color: var(--text-secondary);
+      background: var(--bg-quaternary);
+    }
+
+    .filmstrip-diff-toggle[aria-pressed="true"] {
+      background: var(--accent-orange);
+      color: white;
+      border-color: var(--accent-orange);
+    }
+
+    /* Checkpoint markers on loss curve */
+    .checkpoint-marker {
+      cursor: pointer;
+    }
+
+    .checkpoint-marker:hover line {
+      opacity: 0.7 !important;
+    }
+
+    .checkpoint-marker:hover text {
+      fill: var(--text-primary) !important;
+    }
+
+    /* Inline token input */
+    .token-input {
+      width: 3.5rem;
+      padding: 0.5rem 0.75rem;
+      min-height: 44px;
+      background: var(--bg-tertiary);
+      color: var(--text-primary);
+      border: 1px solid var(--glass-border);
+      border-radius: var(--radius-md);
+      font-family: var(--font-mono);
+      font-size: 1rem;
+      text-align: center;
+      caret-color: var(--accent);
+    }
+
+    .token-input:focus {
+      border-color: var(--accent);
+    }
+
+    .token-input.invalid {
+      border-color: var(--accent-red);
+      color: var(--accent-red);
+    }
+
+    .token-select-fallback {
+      width: auto;
+      max-width: 80px;
+    }
+
+    /* Temperature preview mini-bars */
+    .temp-preview {
+      display: flex;
+      align-items: flex-end;
+      gap: 1px;
+      height: 24px;
+      margin-top: 0.25rem;
+    }
+
+    .temp-preview-bar {
+      flex: 1;
+      min-width: 2px;
+      border-radius: 1px 1px 0 0;
+      background: var(--accent);
+      transition: height 0.1s var(--ease-out);
+    }
+
+    /* Checkpoint card enhancements */
+    .checkpoint-card .loss-value {
+      font-family: var(--font-mono);
+      font-size: 0.7rem;
+      color: var(--accent-hover);
+      margin-bottom: 0.25rem;
+    }
+
     /* Responsive */
     @media (max-width: 768px) {
       .arch-split {
@@ -1432,8 +1826,9 @@
       <div class="card">
         <h2 data-content-key="heading.forwardPass">Forward Pass</h2>
         <div class="input-selector" id="arch-input-selector">
-          <label for="arch-token-select">Token</label>
-          <select id="arch-token-select" aria-label="Input token"></select>
+          <label for="arch-token-input">Token</label>
+          <input type="text" id="arch-token-input" class="token-input" maxlength="1" placeholder="a" aria-label="Type a character to use as input token" autocomplete="off">
+          <select id="arch-token-select" aria-label="Input token" class="token-select-fallback"></select>
           <label for="arch-pos-select">Position</label>
           <select id="arch-pos-select" aria-label="Position index">
             <option value="0">0</option>
@@ -1448,6 +1843,9 @@
           <button class="btn btn-sm" id="btn-run-forward">Run Forward Pass</button>
         </div>
         <div class="arch-gen-context" id="arch-gen-context" aria-live="polite" hidden></div>
+      </div>
+      <div class="arch-progress" id="arch-progress" aria-label="Forward pass progress">
+        <div class="arch-progress-fill" id="arch-progress-fill"></div>
       </div>
       <div class="arch-split">
         <div class="arch-left">
@@ -1516,8 +1914,8 @@
         </div>
       </div>
       <div class="card">
-        <h3 data-content-key="heading.weightInspector">Weight Inspector</h3>
-        <div class="weight-heatmap-grid" id="weight-inspector">
+        <h3 data-content-key="heading.weightInspector">Weight Evolution</h3>
+        <div id="weight-inspector">
           <div class="skeleton" style="height:200px"></div>
         </div>
       </div>
@@ -1534,6 +1932,7 @@
               <input type="range" id="temp-slider" min="1" max="20" value="5" aria-label="Temperature">
               <span class="value" id="temp-value">0.5</span>
             </div>
+            <div class="temp-preview" id="temp-preview" aria-label="Probability distribution preview"></div>
           </div>
           <button class="btn" id="btn-generate">Generate</button>
         </div>
