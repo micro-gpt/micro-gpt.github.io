@@ -129,22 +129,41 @@
       border-bottom-color: var(--text-muted);
     }
 
-    .header .stats {
+    /* Intro section */
+    .intro-card {
+      text-align: center;
+    }
+
+    .intro-heading {
+      font-size: 1.25rem;
+      font-weight: 500;
+      color: var(--text-secondary);
+      margin-bottom: 1.5rem;
+    }
+
+    .intro-generate {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 1rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .intro-stats {
       display: flex;
       gap: 1.5rem;
       justify-content: center;
-      margin-top: 1rem;
       flex-wrap: wrap;
     }
 
-    .header .stat {
+    .stat {
       font-size: 0.8rem;
       color: var(--text-dim);
       letter-spacing: 0.06em;
       text-transform: uppercase;
     }
 
-    .header .stat strong {
+    .stat strong {
       color: var(--text-secondary);
       font-variant-numeric: tabular-nums;
     }
@@ -1171,23 +1190,38 @@
     <header class="header">
       <h1>microGPT</h1>
       <p>Interactive visualization of <a href="https://karpathy.ai/microgpt.html" class="header-link">Andrej Karpathy's microGPT</a> — a 199-line, dependency-free GPT in pure Python</p>
-      <div class="stats">
-        <span class="stat"><strong>4,064</strong> params</span>
-        <span class="stat"><strong>1</strong> layer</span>
-        <span class="stat"><strong>4</strong> heads</span>
-        <span class="stat"><strong>16</strong>-dim</span>
-        <span class="stat"><strong>27</strong> vocab</span>
-      </div>
     </header>
 
     <nav class="mini-nav" role="navigation" aria-label="Visualization sections">
-      <a class="mini-nav-link active" data-section="architecture" href="#section-architecture" aria-current="true">Architecture</a>
+      <a class="mini-nav-link active" data-section="intro" href="#section-intro" aria-current="true">Intro</a>
+      <a class="mini-nav-link" data-section="architecture" href="#section-architecture" aria-current="false">Architecture</a>
       <a class="mini-nav-link" data-section="training" href="#section-training" aria-current="false">Training</a>
-      <a class="mini-nav-link" data-section="inference" href="#section-inference" aria-current="false">Inference</a>
+      <a class="mini-nav-link" data-section="generation" href="#section-generation" aria-current="false">Generation</a>
     </nav>
 
+    <!-- ===== INTRO ===== -->
+    <section class="scroll-section visible" id="section-intro" data-section="intro">
+      <div class="card intro-card">
+        <h2 class="intro-heading">This model learned to generate names. Try it.</h2>
+        <div class="intro-generate">
+          <button class="btn" id="btn-intro-generate">Generate</button>
+          <div class="generated-name" id="intro-output" aria-live="polite">
+            <span class="cursor"></span>
+          </div>
+        </div>
+        <div class="intro-stats">
+          <span class="stat"><strong>4,064</strong> params</span>
+          <span class="stat"><strong>199</strong> lines</span>
+          <span class="stat"><strong>1</strong> layer</span>
+          <span class="stat"><strong>4</strong> heads</span>
+          <span class="stat"><strong>16</strong>-dim</span>
+          <span class="stat"><strong>27</strong> vocab</span>
+        </div>
+      </div>
+    </section>
+
     <!-- ===== ARCHITECTURE ===== -->
-    <section class="scroll-section visible" id="section-architecture" data-section="architecture">
+    <section class="scroll-section" id="section-architecture" data-section="architecture">
       <div class="card">
         <h2>Forward Pass</h2>
         <div class="input-selector" id="arch-input-selector">
@@ -1273,8 +1307,8 @@
       </div>
     </section>
 
-    <!-- ===== INFERENCE ===== -->
-    <section class="scroll-section" id="section-inference" data-section="inference">
+    <!-- ===== GENERATION ===== -->
+    <section class="scroll-section" id="section-generation" data-section="generation">
       <div class="card">
         <h2>Name Generator</h2>
         <div class="controls-row">

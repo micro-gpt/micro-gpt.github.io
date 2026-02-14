@@ -21,7 +21,7 @@ async function loadData() {
 
 // Lazy section initializers
 const initialized = {};
-const sections = ['architecture', 'training', 'inference'];
+const sections = ['intro', 'architecture', 'training', 'generation'];
 
 async function initSection(name) {
   if (initialized[name]) return;
@@ -30,6 +30,33 @@ async function initSection(name) {
   const d = await loadData();
 
   switch (name) {
+    case 'intro': {
+      const { gptForward, softmax, sampleFrom, N_LAYER, BLOCK_SIZE } = await import('./gpt.js');
+      const btn = document.getElementById('btn-intro-generate');
+      const output = document.getElementById('intro-output');
+
+      function generateName() {
+        const { vocab } = d;
+        const keys = Array.from({ length: N_LAYER }, () => []);
+        const values = Array.from({ length: N_LAYER }, () => []);
+        let tokenId = vocab.bos;
+        const chars = [];
+
+        for (let pos = 0; pos < BLOCK_SIZE; pos++) {
+          const { logits } = gptForward(tokenId, pos, keys, values);
+          const probs = softmax(logits.map(l => l / 0.5));
+          tokenId = sampleFrom(probs);
+          if (tokenId === vocab.bos) break;
+          chars.push(vocab.chars[tokenId]);
+        }
+
+        output.textContent = chars.join('') || '(empty)';
+      }
+
+      btn.addEventListener('click', generateName);
+      generateName();
+      break;
+    }
     case 'architecture': {
       const { initArchitecture } = await import('./architecture.js');
       initArchitecture(d);
@@ -43,7 +70,7 @@ async function initSection(name) {
       });
       break;
     }
-    case 'inference': {
+    case 'generation': {
       const { initInference } = await import('./inference.js');
       initInference(d);
       break;
@@ -122,7 +149,7 @@ navLinks.forEach(link => {
   });
 });
 
-// Keyboard: 1-3 jump to sections
+// Keyboard: 1-4 jump to sections
 document.addEventListener('keydown', (e) => {
   const tag = document.activeElement?.tagName;
   if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return;
@@ -149,5 +176,5 @@ subscribe('weightsVersion', () => {
 });
 
 // Init
-set('activeSection', 'architecture');
-initSection('architecture');
+set('activeSection', 'intro');
+initSection('intro');

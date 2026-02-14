@@ -4,6 +4,7 @@
  */
 
 import { loadWeights, getStateDict } from './gpt.js';
+import { set } from './state.js';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
@@ -393,6 +394,7 @@ export function initTraining({ trainingLog, checkpoints, vocab, weights }, onWei
     svgContainer.innerHTML = '';
     svgContainer.appendChild(svg);
 
+    set('trainingStep', 500);
     renderCheckpoints(checkpoints, 500);
     updateScrubber(500);
 
@@ -412,7 +414,9 @@ export function initTraining({ trainingLog, checkpoints, vocab, weights }, onWei
     }
 
     slider.addEventListener('input', () => {
-      updateScrubber(parseInt(slider.value) + 1);
+      const step = parseInt(slider.value) + 1;
+      set('trainingStep', step);
+      updateScrubber(step);
     });
   }
 
@@ -423,6 +427,7 @@ export function initTraining({ trainingLog, checkpoints, vocab, weights }, onWei
     btnTrainScratch.setAttribute('aria-pressed', 'true');
     trainStatus.style.display = 'flex';
     sliderRow.style.display = 'none';
+    set('trainingStep', 0);
     liveCheckpoints = {};
     renderCheckpoints({}, 0);
 
@@ -454,6 +459,7 @@ export function initTraining({ trainingLog, checkpoints, vocab, weights }, onWei
         worker.onmessage = (e) => {
           const msg = e.data;
           if (msg.type === 'step') {
+            set('trainingStep', msg.step);
             liveChart.addPoint(msg.step, msg.loss, msg.lr);
             progressText.textContent = `${msg.step} / 500`;
             progressBar.style.width = `${(msg.step / 500) * 100}%`;

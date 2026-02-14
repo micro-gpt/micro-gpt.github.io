@@ -5,6 +5,7 @@
  */
 
 import { gptForward, softmax, sampleFrom, N_LAYER, N_HEAD, BLOCK_SIZE } from './gpt.js';
+import { set } from './state.js';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 const HEAD_COLORS = ['var(--accent-blue)', 'var(--accent-purple)', 'var(--accent-green)', 'var(--accent-cyan)'];
@@ -351,8 +352,12 @@ export function initInference({ vocab }) {
   const tempValue = document.getElementById('temp-value');
   const btnGenerate = document.getElementById('btn-generate');
 
+  set('temperature', 0.5);
+
   tempSlider.addEventListener('input', () => {
-    tempValue.textContent = (parseInt(tempSlider.value) / 10).toFixed(1);
+    const temp = parseInt(tempSlider.value) / 10;
+    set('temperature', temp);
+    tempValue.textContent = temp.toFixed(1);
   });
 
   btnGenerate.addEventListener('click', () => {

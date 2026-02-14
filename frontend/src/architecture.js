@@ -5,6 +5,7 @@
  */
 
 import { gptForward, softmax, N_LAYER } from './gpt.js';
+import { set } from './state.js';
 
 const BLOCKS = [
   { id: 'tok-embed', label: 'Token Embed', color: '#3b82f6', dimOut: '16-dim', interKey: 'tokEmb', lines: [109, 109], desc: 'Look up the learned 16-dimensional vector for this token' },
@@ -657,6 +658,7 @@ export function initArchitecture({ vocab }) {
   // Highlight a block by index (updates SVG, dots, source, active narrative)
   function highlightBlock(index) {
     currentIndex = index;
+    set('currentBlock', index);
 
     // Update SVG visual states
     updateBlockStates(svg, currentIndex);
@@ -714,10 +716,12 @@ export function initArchitecture({ vocab }) {
 
   // Auto-update on input change
   tokenSelect.addEventListener('change', () => {
+    set('token', parseInt(tokenSelect.value));
     computeForwardPass();
     updateNarrativeData(currentIntermediates, vocab);
   });
   posSelect.addEventListener('change', () => {
+    set('position', parseInt(posSelect.value));
     computeForwardPass();
     updateNarrativeData(currentIntermediates, vocab);
   });
@@ -749,6 +753,9 @@ export function initArchitecture({ vocab }) {
 
   // Run initial forward pass with BOS at position 0
   tokenSelect.value = String(vocab.bos);
+  set('token', vocab.bos);
+  set('position', 0);
+  set('currentBlock', 0);
   computeForwardPass();
 
   // Render all narrative blocks with data
