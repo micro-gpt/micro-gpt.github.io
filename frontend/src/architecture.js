@@ -1429,6 +1429,22 @@ export function initArchitecture({ vocab }) {
   }
   setupScrollObserver();
 
+  // Narrative entrance animations (slide-up + fade)
+  const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (reduceMotion) {
+    narrativeContainer.querySelectorAll('.arch-narrative').forEach(el => el.classList.add('visible'));
+  } else {
+    const entranceObserver = new IntersectionObserver((entries) => {
+      for (const entry of entries) {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('visible');
+          entranceObserver.unobserve(entry.target);
+        }
+      }
+    }, { threshold: 0.1 });
+    narrativeContainer.querySelectorAll('.arch-narrative').forEach(el => entranceObserver.observe(el));
+  }
+
   // Heatmap head tab switching + derivation toggle (event delegation)
   narrativeContainer.addEventListener('click', (e) => {
     // Head tab switching

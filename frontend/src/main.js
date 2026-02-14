@@ -217,6 +217,10 @@ function updateContentKeys() {
 subscribe('eli5', updateContentKeys);
 if (eli5Stored) updateContentKeys();
 
+// Tour + tooltips
+import('./tour.js').then(({ initTour }) => initTour());
+import('./tooltip.js').then(({ initTooltips }) => initTooltips());
+
 // Init
 set('activeSection', 'intro');
 initSection('intro');
