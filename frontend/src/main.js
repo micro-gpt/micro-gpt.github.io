@@ -162,6 +162,11 @@ document.addEventListener('keydown', (e) => {
   }
 });
 
+// Generation → Architecture: ensure architecture inits when a token is clicked
+subscribe('token', () => {
+  if (!initialized.architecture) initSection('architecture');
+});
+
 // Training callback: re-init architecture when weights change
 subscribe('weightsVersion', () => {
   const archEl = document.getElementById('section-architecture');

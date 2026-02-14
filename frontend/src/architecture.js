@@ -5,7 +5,7 @@
  */
 
 import { gptForward, softmax, N_LAYER } from './gpt.js';
-import { set } from './state.js';
+import { get, set, subscribe } from './state.js';
 
 const BLOCKS = [
   { id: 'tok-embed', label: 'Token Embed', color: '#5B8DEF', dimOut: '16-dim', interKey: 'tokEmb', lines: [109, 109], desc: 'Look up the learned 16-dimensional vector for this token' },
@@ -637,7 +637,13 @@ function createSVG() {
   return svg;
 }
 
+let cleanupSubs = [];
+
 export function initArchitecture({ vocab }) {
+  // Clean up previous subscriptions on re-init
+  for (const unsub of cleanupSubs) unsub();
+  cleanupSubs = [];
+
   const container = document.getElementById('arch-svg-container');
   const narrativeContainer = document.getElementById('arch-narrative-container');
   const tokenSelect = document.getElementById('arch-token-select');
@@ -750,14 +756,17 @@ export function initArchitecture({ vocab }) {
     }, 800);
   });
 
+  // Flag to prevent self-triggering when architecture's own selects call set()
+  let externalUpdate = false;
+
   // Auto-update on input change
   tokenSelect.addEventListener('change', () => {
-    set('token', parseInt(tokenSelect.value));
+    if (!externalUpdate) set('token', parseInt(tokenSelect.value));
     computeForwardPass();
     updateNarrativeData(currentIntermediates, vocab);
   });
   posSelect.addEventListener('change', () => {
-    set('position', parseInt(posSelect.value));
+    if (!externalUpdate) set('position', parseInt(posSelect.value));
     computeForwardPass();
     updateNarrativeData(currentIntermediates, vocab);
   });
@@ -787,10 +796,32 @@ export function initArchitecture({ vocab }) {
     if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleFullSource(); }
   });
 
-  // Run initial forward pass with BOS at position 0
-  tokenSelect.value = String(vocab.bos);
-  set('token', vocab.bos);
-  set('position', 0);
+  // Subscribe to external token/position changes (e.g. from generation section)
+  cleanupSubs.push(subscribe('token', (val) => {
+    if (val == null) return;
+    externalUpdate = true;
+    tokenSelect.value = String(val);
+    tokenSelect.dispatchEvent(new Event('change'));
+    externalUpdate = false;
+  }));
+  cleanupSubs.push(subscribe('position', (val) => {
+    if (val == null) return;
+    externalUpdate = true;
+    posSelect.value = String(val);
+    posSelect.dispatchEvent(new Event('change'));
+    externalUpdate = false;
+  }));
+
+  // Pick up current state values (may have been set before architecture init)
+  const initToken = get('token');
+  const initPos = get('position');
+  const useToken = initToken != null ? initToken : vocab.bos;
+  const usePos = initPos != null ? initPos : 0;
+
+  // Run initial forward pass
+  tokenSelect.value = String(useToken);
+  set('token', useToken);
+  set('position', usePos);
   set('currentBlock', 0);
   computeForwardPass();
 

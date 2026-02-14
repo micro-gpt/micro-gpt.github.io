@@ -343,6 +343,7 @@ self.onmessage = function(e) {
         names.push(generateName(stateDict, uchars, vocabSize, 0.5));
       }
       self.postMessage({ type: 'checkpoint', step: stepNum, names });
+      self.postMessage({ type: 'checkpoint-weights', step: stepNum, weights: exportWeights(stateDict) });
     }
   }
 

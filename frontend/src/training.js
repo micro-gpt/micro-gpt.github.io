@@ -4,9 +4,20 @@
  */
 
 import { loadWeights, getStateDict } from './gpt.js';
-import { set } from './state.js';
+import { get, set, subscribe } from './state.js';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
+
+let checkpointWeights = null;
+let currentCheckpointStep = 500;
+const CHECKPOINT_STEPS = [1, 10, 50, 100, 200, 300, 400, 500];
+
+function nearestCheckpoint(step) {
+  for (let i = CHECKPOINT_STEPS.length - 1; i >= 0; i--) {
+    if (CHECKPOINT_STEPS[i] <= step) return CHECKPOINT_STEPS[i];
+  }
+  return CHECKPOINT_STEPS[0];
+}
 
 // --- Weight Inspector ---
 function drawHeatmap(canvas, matrix, label) {
@@ -379,6 +390,9 @@ export function initTraining({ trainingLog, checkpoints, vocab, weights }, onWei
   let worker = null;
   let liveChart = null;
   let liveCheckpoints = {};
+  let sliderController = null;
+
+  const vocabSize = vocab.chars.length + 1;
 
   // --- Pre-trained mode ---
   function showPretrained() {
@@ -390,16 +404,28 @@ export function initTraining({ trainingLog, checkpoints, vocab, weights }, onWei
 
     if (worker) { worker.terminate(); worker = null; }
 
+    // Restore original weights when entering pretrained mode
+    loadWeights(weights, vocabSize);
+
     const { svg, xScale, yLoss } = createTrainingSVG(trainingLog);
     svgContainer.innerHTML = '';
     svgContainer.appendChild(svg);
 
     set('trainingStep', 500);
+    currentCheckpointStep = 500;
     renderCheckpoints(checkpoints, 500);
     updateScrubber(500);
 
     // Re-render weight inspector with pre-trained weights
     renderWeightInspector(getStateDict());
+
+    // Lazy-fetch checkpoint weights
+    if (!checkpointWeights) {
+      fetch('/data/checkpoint-weights.json')
+        .then(r => r.ok ? r.json() : null)
+        .then(data => { checkpointWeights = data; })
+        .catch(() => {});
+    }
 
     function updateScrubber(step) {
       const entry = trainingLog[step - 1];
@@ -413,11 +439,24 @@ export function initTraining({ trainingLog, checkpoints, vocab, weights }, onWei
       renderCheckpoints(checkpoints, step);
     }
 
+    // Abort previous slider listener to prevent accumulation
+    if (sliderController) sliderController.abort();
+    sliderController = new AbortController();
+
     slider.addEventListener('input', () => {
       const step = parseInt(slider.value) + 1;
       set('trainingStep', step);
       updateScrubber(step);
-    });
+
+      if (!checkpointWeights) return;
+      const cp = nearestCheckpoint(step);
+      if (cp !== currentCheckpointStep) {
+        currentCheckpointStep = cp;
+        loadWeights(checkpointWeights[String(cp)], vocabSize);
+        renderWeightInspector(getStateDict());
+        set('weightsVersion', (get('weightsVersion') || 0) + 1);
+      }
+    }, { signal: sliderController.signal });
   }
 
   // --- Train from scratch mode ---
@@ -466,6 +505,10 @@ export function initTraining({ trainingLog, checkpoints, vocab, weights }, onWei
           } else if (msg.type === 'checkpoint') {
             liveCheckpoints[String(msg.step)] = msg.names;
             renderCheckpoints(liveCheckpoints, msg.step);
+          } else if (msg.type === 'checkpoint-weights') {
+            loadWeights(Array.from(msg.weights), vocabSize);
+            renderWeightInspector(getStateDict());
+            set('weightsVersion', (get('weightsVersion') || 0) + 1);
           } else if (msg.type === 'weights') {
             // Load the freshly trained weights
             loadWeights(Array.from(msg.weights), vocab.chars.length + 1);

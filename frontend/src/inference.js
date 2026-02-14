@@ -10,6 +10,14 @@ import { set } from './state.js';
 const SVG_NS = 'http://www.w3.org/2000/svg';
 const HEAD_COLORS = ['var(--accent-blue)', 'var(--accent-purple)', 'var(--accent-green)', 'var(--accent-cyan)'];
 
+const BLOCK_COLORS = {
+  tokEmb: '#5B8DEF', posEmb: '#5B8DEF', combined: '#5B8DEF',
+  postNorm0: '#9B7AEA', postNorm1: '#9B7AEA', postNorm2: '#9B7AEA',
+  q: '#22D3EE', k: '#22D3EE', v: '#22D3EE', attnOut: '#22D3EE',
+  postResidual1: '#6B7585', postResidual2: '#6B7585',
+  mlpHidden: '#FB923C', mlpActivated: '#FB923C', mlpOut: '#FB923C',
+};
+
 let generating = false;
 let storedAttn = [];
 let storedTokens = [];
@@ -268,7 +276,8 @@ function renderIntermediateViewer(intermediates) {
       return `<div class="val-cell" style="background:${bg}" title="${v.toFixed(6)}">${v.toFixed(3)}</div>`;
     }).join('');
 
-    return `<div class="data-viewer" style="margin-bottom:0.5rem">
+    const borderColor = BLOCK_COLORS[key] || 'var(--text-dim)';
+    return `<div class="data-viewer inter-block" style="border-left-color:${borderColor};margin-bottom:0.5rem">
       <div class="vector-label">${label} [${values.length}]</div>
       <div class="values-grid">${cells}</div>
     </div>`;
@@ -326,7 +335,9 @@ async function generate(vocab, temperature) {
     generatedTokens.push(tokenId);
     storedTokens.push(tokenId);
 
-    output.innerHTML = generatedTokens.map(t => chars[t]).join('') + '<span class="cursor"></span>';
+    output.innerHTML = generatedTokens.map((t, i) =>
+      `<span class="gen-token" data-token="${t}" data-pos="${i}">${chars[t]}</span>`
+    ).join('') + '<span class="cursor"></span>';
 
     if (delay > 0) {
       await new Promise(r => setTimeout(r, delay));
@@ -338,7 +349,22 @@ async function generate(vocab, temperature) {
   generating = false;
   renderAttnTokens();
 
-  output.innerHTML = generatedTokens.map(t => chars[t]).join('') || '<span style="color:var(--text-dim)">(empty)</span>';
+  if (generatedTokens.length === 0) {
+    output.innerHTML = '<span style="color:var(--text-dim)">(empty)</span>';
+  } else {
+    output.innerHTML = generatedTokens.map((t, i) =>
+      `<span class="gen-token" data-token="${t}" data-pos="${i}">${chars[t]}</span>`
+    ).join('');
+
+    // Add click handlers to scroll to architecture and show token's forward pass
+    output.querySelectorAll('.gen-token').forEach(span => {
+      span.addEventListener('click', () => {
+        set('token', parseInt(span.dataset.token));
+        set('position', parseInt(span.dataset.pos));
+        document.getElementById('section-architecture').scrollIntoView({ behavior: 'smooth' });
+      });
+    });
+  }
 
   btn.disabled = false;
 }

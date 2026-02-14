@@ -162,6 +162,10 @@ num_steps = 500
 training_log = []
 checkpoint_steps = [1, 10, 50, 100, 200, 300, 400, 500]
 checkpoints = {}
+checkpoint_weights = {}
+weight_order = ['wte', 'wpe', 'lm_head',
+                'layer0.attn_wq', 'layer0.attn_wk', 'layer0.attn_wv', 'layer0.attn_wo',
+                'layer0.mlp_fc1', 'layer0.mlp_fc2']
 
 for step in range(num_steps):
     doc = docs[step % len(docs)]
@@ -205,14 +209,19 @@ for step in range(num_steps):
         checkpoints[str(step_num)] = names
         print(f"  checkpoint {step_num}: {names}")
 
+        # Snapshot flattened weights at this checkpoint
+        flat = []
+        for key in weight_order:
+            for row in state_dict[key]:
+                for val in row:
+                    flat.append(round(val.data, 6))
+        checkpoint_weights[str(step_num)] = flat
+
 # --- Export ---
 out_dir = os.path.join('frontend', 'public', 'data')
 os.makedirs(out_dir, exist_ok=True)
 
 # Weights: flat array of all parameter values
-weight_order = ['wte', 'wpe', 'lm_head',
-                'layer0.attn_wq', 'layer0.attn_wk', 'layer0.attn_wv', 'layer0.attn_wo',
-                'layer0.mlp_fc1', 'layer0.mlp_fc2']
 weights = []
 for key in weight_order:
     for row in state_dict[key]:
@@ -231,6 +240,9 @@ with open(os.path.join(out_dir, 'checkpoints.json'), 'w') as f:
 with open(os.path.join(out_dir, 'vocab.json'), 'w') as f:
     json.dump({'chars': uchars, 'bos': BOS}, f)
 
+with open(os.path.join(out_dir, 'checkpoint-weights.json'), 'w') as f:
+    json.dump(checkpoint_weights, f)
+
 # Training docs: shuffled document list for in-browser training
 with open(os.path.join(out_dir, 'training-docs.json'), 'w') as f:
     json.dump(docs, f)
@@ -241,3 +253,4 @@ print(f"  training-log.json: {len(training_log)} steps")
 print(f"  checkpoints.json: {len(checkpoints)} checkpoints")
 print(f"  vocab.json: {len(uchars)} chars + BOS={BOS}")
 print(f"  training-docs.json: {len(docs)} documents")
+print(f"  checkpoint-weights.json: {len(checkpoint_weights)} checkpoints")
