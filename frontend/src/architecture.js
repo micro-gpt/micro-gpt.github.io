@@ -545,7 +545,6 @@ function createSVG() {
   const svg = document.createElementNS(SVG_NS, 'svg');
   svg.setAttribute('viewBox', `0 0 ${totalW} ${totalH}`);
   svg.setAttribute('width', '100%');
-  svg.setAttribute('height', totalH);
   svg.setAttribute('aria-label', 'GPT architecture flow diagram');
   svg.setAttribute('role', 'img');
   svg.style.maxWidth = `${totalW}px`;
