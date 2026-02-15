@@ -7,9 +7,7 @@
 import { gptForward, softmax, sampleFrom, N_LAYER, N_HEAD, BLOCK_SIZE } from './gpt.js';
 import { set } from './state.js';
 import { t } from './content.js';
-
-const SVG_NS = 'http://www.w3.org/2000/svg';
-const HEAD_COLORS = ['var(--accent-blue)', 'var(--accent-purple)', 'var(--accent-green)', 'var(--accent-cyan)'];
+import { drawAttentionArcs } from './viz-utils.js';
 
 const BLOCK_COLORS = {
   tokEmb: '#5B8DEF', posEmb: '#5B8DEF', combined: '#5B8DEF',
@@ -151,86 +149,22 @@ function measureTokenPositions() {
 
 function renderArcs(tokenIdx) {
   const svg = document.getElementById('attn-arcs-svg');
-  svg.innerHTML = '';
 
-  if (tokenIdx < 0 || tokenIdx >= storedAttn.length) return;
+  if (tokenIdx < 0 || tokenIdx >= storedAttn.length) {
+    svg.innerHTML = '';
+    svg.style.height = '0';
+    return;
+  }
 
   const positions = measureTokenPositions();
   if (positions.length === 0) return;
 
-  const stepAttn = storedAttn[tokenIdx];
-  if (!stepAttn) return;
-
-  // Mark target tokens
   const tokenBtns = document.querySelectorAll('#attn-token-row .attn-token');
-  tokenBtns.forEach(b => b.classList.remove('target'));
-
-  const singleHead = activeHead !== 'all';
-  const headList = singleHead ? [parseInt(activeHead)] : [0, 1, 2, 3];
-
-  // Collect all arcs
-  const arcs = [];
-  for (const h of headList) {
-    const weights = stepAttn[h];
-    if (!weights) continue;
-    for (let t = 0; t < weights.length; t++) {
-      if (t === tokenIdx) continue; // skip self-attention
-      if (weights[t] < 0.01) continue;
-      arcs.push({ head: h, target: t, weight: weights[t] });
-    }
-  }
-
-  // Sort thin-first so heavy arcs render on top
-  arcs.sort((a, b) => a.weight - b.weight);
-
-  const y = positions[0].top;
-  let maxDepth = 0;
-
-  for (const arc of arcs) {
-    const srcPos = positions[tokenIdx];
-    const tgtPos = positions[arc.target];
-    if (!srcPos || !tgtPos) continue;
-
-    // Mark target token
-    if (tokenBtns[arc.target]) {
-      tokenBtns[arc.target].classList.add('target');
-    }
-
-    const x1 = srcPos.cx;
-    const x2 = tgtPos.cx;
-    const dist = Math.abs(tokenIdx - arc.target);
-    const depth = y + 12 + dist * 18;
-    if (depth > maxDepth) maxDepth = depth;
-
-    const strokeWidth = 1.5 + arc.weight * 4.5;
-    const opacity = singleHead
-      ? 0.3 + arc.weight * 0.65
-      : 0.2 + arc.weight * 0.5;
-
-    const path = document.createElementNS(SVG_NS, 'path');
-    path.setAttribute('d', `M ${x1},${y} Q ${(x1 + x2) / 2},${depth} ${x2},${y}`);
-    path.setAttribute('class', 'attn-arc');
-    path.setAttribute('stroke', HEAD_COLORS[arc.head]);
-    path.setAttribute('stroke-width', strokeWidth);
-    path.setAttribute('opacity', opacity);
-    svg.appendChild(path);
-
-    // Weight label on significant arcs in single-head mode
-    if (singleHead && arc.weight >= 0.1) {
-      const label = document.createElementNS(SVG_NS, 'text');
-      const midX = (x1 + x2) / 2;
-      const midY = (y + depth) / 2 + 4;
-      label.setAttribute('x', midX);
-      label.setAttribute('y', midY);
-      label.setAttribute('text-anchor', 'middle');
-      label.setAttribute('class', 'attn-arc-label');
-      label.textContent = `${Math.round(arc.weight * 100)}%`;
-      svg.appendChild(label);
-    }
-  }
-
-  // Set SVG height to fit arcs
-  svg.style.height = maxDepth > 0 ? `${maxDepth + 8}px` : '0';
+  drawAttentionArcs(svg, tokenIdx, storedAttn[tokenIdx], positions, {
+    head: activeHead,
+    showLabels: true,
+    targetElements: tokenBtns,
+  });
 }
 
 function clearArcs() {

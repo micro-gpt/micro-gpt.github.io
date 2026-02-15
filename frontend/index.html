@@ -1231,11 +1231,34 @@
       display: block;
     }
 
-    /* Skeleton height variants */
+    /* Skeleton height variants + pulse */
     .skeleton-arch { height: 600px; }
     .skeleton-chart { height: 300px; }
     .skeleton-grid { height: 120px; }
     .skeleton-heatmap { height: 200px; }
+    .skeleton-arch,
+    .skeleton-chart,
+    .skeleton-grid,
+    .skeleton-heatmap {
+      background: var(--surface-alt, #141926);
+      border-radius: 8px;
+      animation: skeleton-pulse 1.5s ease-in-out infinite;
+    }
+    @keyframes skeleton-pulse {
+      0%, 100% { opacity: 0.4; }
+      50% { opacity: 0.7; }
+    }
+
+    /* Chart fade-in on load */
+    .loss-curve-chart,
+    .attn-heatmap-echart,
+    [data-weight-chart] {
+      animation: chart-fadein 0.4s ease-out;
+    }
+    @keyframes chart-fadein {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
 
     /* Spacing utility classes */
     .slider-row-spaced { margin-top: 1rem; }

@@ -10,6 +10,7 @@ import { t } from './content.js';
 import { initFlowChart, updateFlowChart } from './flow-chart.js';
 import { initEmbeddingChart } from './embedding-chart.js';
 import { createChart, monoTooltip } from './echarts-setup.js';
+import { drawCanvasHeatmap, drawAttentionArcs } from './viz-utils.js';
 
 const BLOCKS = [
   { id: 'tok-embed', label: 'Token Embed', color: '#5B8DEF', dimOut: '16-dim', interKey: 'tokEmb', lines: [109, 109] },
@@ -50,7 +51,6 @@ const BLOCK_DETAILS = {
 };
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
-const HEAD_COLORS = ['var(--accent-blue)', 'var(--accent-purple)', 'var(--accent-green)', 'var(--accent-cyan)'];
 const HEAD_COLORS_HEX = ['#5B8DEF', '#9B7AEA', '#4ADE80', '#22D3EE'];
 
 let currentAttnMatrix = null; // Full attention matrix: [pos][head][targetPos] = weight
@@ -639,32 +639,9 @@ function renderAttnDerivation(intermediates) {
 function drawDerivationCanvases() {
   const sd = getStateDict();
   if (!sd) return;
-
   document.querySelectorAll('.derivation-matrix').forEach(canvas => {
-    const matName = canvas.dataset.matrix;
-    const mat = sd[matName];
-    if (!mat) return;
-
-    const ctx = canvas.getContext('2d');
-    const rows = mat.length;
-    const cols = mat[0].length;
-
-    let absMax = 0;
-    for (const row of mat) for (const v of row) absMax = Math.max(absMax, Math.abs(v));
-    if (absMax === 0) absMax = 1;
-
-    for (let r = 0; r < rows; r++) {
-      for (let c = 0; c < cols; c++) {
-        const v = mat[r][c] / absMax;
-        if (v >= 0) {
-          ctx.fillStyle = `rgb(${15 + (1-v)*30}, ${23 + (1-v)*30}, ${80 + v*175})`;
-        } else {
-          const a = Math.abs(v);
-          ctx.fillStyle = `rgb(${80 + a*175}, ${23 + (1-a)*30}, ${15 + (1-a)*30})`;
-        }
-        ctx.fillRect(c, r, 1, 1);
-      }
-    }
+    const mat = sd[canvas.dataset.matrix];
+    if (mat) drawCanvasHeatmap(canvas, mat);
   });
 }
 
@@ -672,19 +649,15 @@ function drawDerivationCanvases() {
 function drawArchAttnArcs() {
   const section = document.querySelector('.arch-attn-arc-section');
   if (!section) return;
-
   const svg = section.querySelector('.arch-attn-arcs-svg');
   if (!svg) return;
-  svg.innerHTML = '';
 
   const posId = parseInt(section.dataset.pos);
   if (posId === 0 || !currentAttnMatrix || posId >= currentAttnMatrix.length) {
+    svg.innerHTML = '';
     svg.style.height = '0';
     return;
   }
-
-  const stepAttn = currentAttnMatrix[posId];
-  if (!stepAttn) return;
 
   const buttons = section.querySelectorAll('.arch-attn-pos-btn');
   if (buttons.length === 0) return;
@@ -695,52 +668,10 @@ function drawArchAttnArcs() {
     return { cx: rect.left + rect.width / 2 - svgRect.left, top: rect.bottom - svgRect.top + 4 };
   });
 
-  const head = currentActiveHead;
-  const singleHead = head !== 'avg';
-  const headList = singleHead ? [parseInt(head)] : [0, 1, 2, 3];
-
-  const arcs = [];
-  for (const h of headList) {
-    const weights = stepAttn[h];
-    if (!weights) continue;
-    for (let t = 0; t < weights.length; t++) {
-      if (t === posId) continue;
-      if (weights[t] < 0.01) continue;
-      arcs.push({ head: h, target: t, weight: weights[t] });
-    }
-  }
-
-  arcs.sort((a, b) => a.weight - b.weight);
-
-  const y = positions[0]?.top || 0;
-  let maxDepth = 0;
-
-  for (const arc of arcs) {
-    const srcPos = positions[posId];
-    const tgtPos = positions[arc.target];
-    if (!srcPos || !tgtPos) continue;
-
-    buttons[arc.target]?.classList.add('target');
-
-    const x1 = srcPos.cx;
-    const x2 = tgtPos.cx;
-    const dist = Math.abs(posId - arc.target);
-    const depth = y + 12 + dist * 18;
-    if (depth > maxDepth) maxDepth = depth;
-
-    const strokeWidth = 1.5 + arc.weight * 4.5;
-    const opacity = singleHead ? 0.3 + arc.weight * 0.65 : 0.2 + arc.weight * 0.5;
-
-    const path = document.createElementNS(SVG_NS, 'path');
-    path.setAttribute('d', `M ${x1},${y} Q ${(x1 + x2) / 2},${depth} ${x2},${y}`);
-    path.setAttribute('class', 'attn-arc');
-    path.setAttribute('stroke', HEAD_COLORS[arc.head]);
-    path.setAttribute('stroke-width', strokeWidth);
-    path.setAttribute('opacity', opacity);
-    svg.appendChild(path);
-  }
-
-  svg.style.height = maxDepth > 0 ? `${maxDepth + 8}px` : '0';
+  drawAttentionArcs(svg, posId, currentAttnMatrix[posId], positions, {
+    head: currentActiveHead,
+    targetElements: buttons,
+  });
 }
 
 // Render all 11 narrative blocks into the narrative container

@@ -6,7 +6,8 @@
 import { loadWeights, getStateDict } from './gpt.js';
 import { get, set, subscribe } from './state.js';
 import { t } from './content.js';
-import { createChart, FONT_FAMILY } from './echarts-setup.js';
+import { createChart, FONT_FAMILY, monoTooltip, tooltipWrap } from './echarts-setup.js';
+import { drawCanvasHeatmap } from './viz-utils.js';
 
 let checkpointWeights = null;
 let currentCheckpointStep = 500;
@@ -32,32 +33,6 @@ const WEIGHT_MATRICES = [
 ];
 
 let weightCharts = {};
-
-// Legacy drawHeatmap still used by filmstrip canvases
-function drawHeatmap(canvas, matrix) {
-  const rows = matrix.length;
-  const cols = matrix[0].length;
-  canvas.width = cols;
-  canvas.height = rows;
-  const ctx = canvas.getContext('2d');
-
-  let absMax = 0;
-  for (const row of matrix) for (const v of row) absMax = Math.max(absMax, Math.abs(v));
-  if (absMax < 0.001) absMax = 0.001;
-
-  for (let r = 0; r < rows; r++) {
-    for (let c = 0; c < cols; c++) {
-      const v = matrix[r][c] / absMax;
-      if (v >= 0) {
-        ctx.fillStyle = `rgb(${Math.round(15 + (1 - v) * 30)}, ${Math.round(23 + (1 - v) * 30)}, ${Math.round(80 + v * 175)})`;
-      } else {
-        const a = Math.abs(v);
-        ctx.fillStyle = `rgb(${Math.round(80 + a * 175)}, ${Math.round(23 + (1 - a) * 30)}, ${Math.round(15 + (1 - a) * 30)})`;
-      }
-      ctx.fillRect(c, r, 1, 1);
-    }
-  }
-}
 
 function matrixToHeatmapData(matrix) {
   const data = [];
@@ -118,7 +93,7 @@ function renderWeightInspector(stateDict) {
       tooltip: {
         formatter: (params) => {
           const [col, row, val] = params.value;
-          return `<span style="font-family:monospace">${key}[${row}][${col}] = ${val.toFixed(4)}</span>`;
+          return monoTooltip(`${key}[${row}][${col}]`, val.toFixed(4));
         },
       },
       xAxis: {
@@ -346,7 +321,7 @@ function drawFilmstripCanvases(container, allCheckpointWeights, vocabSize, steps
         const prevSd = getStateDict();
         drawHeatmapDiff(canvas, matrix, prevSd[key]);
       } else {
-        drawHeatmap(canvas, matrix, key);
+        drawCanvasHeatmap(canvas, matrix);
       }
     }
   }
@@ -375,7 +350,7 @@ function lossCurveBaseOption(trainingLog) {
         const step = params[0]?.axisValue;
         const loss = params.find(p => p.seriesName === 'Loss');
         const lr = params.find(p => p.seriesName === 'Learning Rate');
-        return `<span style="font-family:monospace;font-size:12px">Step <strong>${step}</strong><br/>Loss: <strong>${loss ? loss.value.toFixed(4) : '—'}</strong><br/>LR: <strong>${lr ? lr.value.toFixed(6) : '—'}</strong></span>`;
+        return tooltipWrap(`Step <strong>${step}</strong><br/>Loss: <strong>${loss ? loss.value.toFixed(4) : '—'}</strong><br/>LR: <strong>${lr ? lr.value.toFixed(6) : '—'}</strong>`);
       },
     },
     grid: { left: 60, right: 60, top: 20, bottom: 40 },
@@ -471,7 +446,7 @@ function createLiveChart(container) {
         const step = params[0]?.axisValue;
         const loss = params.find(p => p.seriesName === 'Loss');
         const lr = params.find(p => p.seriesName === 'Learning Rate');
-        return `<span style="font-family:monospace;font-size:12px">Step <strong>${step}</strong><br/>Loss: <strong>${loss ? loss.value.toFixed(4) : '—'}</strong><br/>LR: <strong>${lr ? lr.value.toFixed(6) : '—'}</strong></span>`;
+        return tooltipWrap(`Step <strong>${step}</strong><br/>Loss: <strong>${loss ? loss.value.toFixed(4) : '—'}</strong><br/>LR: <strong>${lr ? lr.value.toFixed(6) : '—'}</strong>`);
       },
     },
     grid: { left: 60, right: 60, top: 20, bottom: 40 },

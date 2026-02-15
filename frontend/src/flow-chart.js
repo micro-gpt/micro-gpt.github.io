@@ -3,7 +3,7 @@
  * Shows activation magnitudes flowing through the network layers.
  */
 
-import { createChart, FONT_FAMILY } from './echarts-setup.js';
+import { createChart, FONT_FAMILY, monoTooltip } from './echarts-setup.js';
 import { subscribe } from './state.js';
 
 let chart = null;
@@ -81,8 +81,8 @@ export function updateFlowChart(intermediates) {
         if (params.dataType === 'node') {
           return `<strong>${params.name}</strong>`;
         }
-        return `${params.data.source} → ${params.data.target}<br/>` +
-               `<span style="font-family:monospace">L2 norm: ${params.data.value.toFixed(2)}</span>`;
+        return `${params.data.source} \u2192 ${params.data.target}<br/>` +
+               monoTooltip('L2 norm', params.data.value.toFixed(2));
       },
     },
     series: [{

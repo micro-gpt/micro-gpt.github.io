@@ -4,7 +4,7 @@
  * Each polyline is one token (a–z + BOS). Current token highlighted.
  */
 
-import { createChart, FONT_FAMILY } from './echarts-setup.js';
+import { createChart, FONT_FAMILY, tooltipWrap } from './echarts-setup.js';
 import { getStateDict, N_EMBD } from './gpt.js';
 import { get, subscribe } from './state.js';
 
@@ -93,7 +93,7 @@ function buildOption(vocab) {
         const preview = vec.slice(0, 8).map(v => v.toFixed(3)).join(', ');
         const rest = vec.slice(8).map(v => v.toFixed(3)).join(', ');
         return `<strong>${params.name}</strong><br/>` +
-          `<span style="font-family:monospace;font-size:11px">[${preview},<br/>&nbsp;${rest}]</span>`;
+          tooltipWrap(`[${preview},<br/>&nbsp;${rest}]`);
       },
     },
     series: [{

@@ -5,13 +5,20 @@ import { t } from './content.js';
 // Data cache
 let data = null;
 
+function fetchJSON(url) {
+  return fetch(url).then(r => {
+    if (!r.ok) throw new Error(`Failed to load ${url} (${r.status})`);
+    return r.json();
+  });
+}
+
 async function loadData() {
   if (data) return data;
   const [weights, trainingLog, checkpoints, vocab] = await Promise.all([
-    fetch('/data/weights.json').then(r => r.json()),
-    fetch('/data/training-log.json').then(r => r.json()),
-    fetch('/data/checkpoints.json').then(r => r.json()),
-    fetch('/data/vocab.json').then(r => r.json()),
+    fetchJSON('/data/weights.json'),
+    fetchJSON('/data/training-log.json'),
+    fetchJSON('/data/checkpoints.json'),
+    fetchJSON('/data/vocab.json'),
   ]);
 
   loadWeights(weights, vocab.chars.length + 1);

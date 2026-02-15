@@ -70,9 +70,14 @@ export function createChart(el) {
   return chart;
 }
 
-/** Shared tooltip formatter style. */
+/** Wrap tooltip HTML in monospace styling (ECharts tooltips require inline styles). */
+export function tooltipWrap(html) {
+  return `<span style="font-family:monospace;font-size:12px">${html}</span>`;
+}
+
+/** Format a label: value tooltip in monospace. */
 export function monoTooltip(label, value) {
-  return `<span style="font-family:monospace;font-size:12px">${label}: <strong>${value}</strong></span>`;
+  return tooltipWrap(`${label}: <strong>${value}</strong>`);
 }
 
 export { FONT_FAMILY };
