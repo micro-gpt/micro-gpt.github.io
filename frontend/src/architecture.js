@@ -802,9 +802,10 @@ function createSVG() {
 
   const centerX = totalW / 2 - 30;
 
-  // SVG layers: connectors (back), blocks (middle), flow dots (front)
+  // SVG layers: connectors (back), blocks, dim labels, flow dots (front)
   const connectorLayer = document.createElementNS(SVG_NS, 'g');
   const blockLayer = document.createElementNS(SVG_NS, 'g');
+  const labelLayer = document.createElementNS(SVG_NS, 'g');
   const dotLayer = document.createElementNS(SVG_NS, 'g');
 
   BLOCKS.forEach((block, i) => {
@@ -875,14 +876,14 @@ function createSVG() {
     text.textContent = block.label;
     g.appendChild(text);
 
-    // Dimension label (aligned with block label)
+    // Dimension label — in separate layer so block highlight doesn't bleed over it
     const dimText = document.createElementNS(SVG_NS, 'text');
     dimText.setAttribute('x', x + w + 12);
     dimText.setAttribute('y', y + 22);
     dimText.setAttribute('dominant-baseline', 'middle');
     dimText.setAttribute('class', 'dim-label');
     dimText.textContent = block.dimOut;
-    g.appendChild(dimText);
+    labelLayer.appendChild(dimText);
 
     // Expand chevron (visible on hover)
     const chevron = document.createElementNS(SVG_NS, 'path');
@@ -907,6 +908,7 @@ function createSVG() {
 
   svg.appendChild(connectorLayer);
   svg.appendChild(blockLayer);
+  svg.appendChild(labelLayer);
   svg.appendChild(dotLayer);
 
   return svg;
