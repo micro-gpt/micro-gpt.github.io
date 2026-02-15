@@ -1,7 +1,7 @@
 /**
- * Architecture section — scrollytelling block explorer.
- * Sticky SVG diagram on left, scrollable narrative blocks on right.
- * Scroll position drives SVG block highlighting via IntersectionObserver.
+ * Architecture section — block explorer with SVG diagram and narrative panels.
+ * Sticky SVG diagram on left, step-through narrative blocks on right.
+ * Navigation via prev/next buttons, dot indicators, and keyboard arrows.
  */
 
 import { gptForward, softmax, N_LAYER, getStateDict } from './gpt.js';
@@ -1228,6 +1228,11 @@ export function initArchitecture({ vocab }) {
       el.classList.toggle('active', i === currentIndex);
     });
 
+    // Resize attention heatmap when its block becomes visible
+    if (currentIndex === 4 && attnHeatmapChart) {
+      attnHeatmapChart.resize();
+    }
+
     // Update full source highlighting (if collapsible is open)
     const block = BLOCKS[currentIndex];
     const fullSourceContent = document.getElementById('arch-full-source-content');
@@ -1413,39 +1418,6 @@ export function initArchitecture({ vocab }) {
   drawDerivationCanvases();
   drawArchAttnArcs();
 
-  // Set up scroll observer — highlights block when it enters top 40% of viewport
-  let scrollObserver = null;
-  function setupScrollObserver() {
-    if (scrollObserver) scrollObserver.disconnect();
-    scrollObserver = new IntersectionObserver((entries) => {
-      for (const entry of entries) {
-        if (entry.isIntersecting) {
-          highlightBlock(parseInt(entry.target.dataset.blockIndex));
-        }
-      }
-    }, { rootMargin: '0px 0px -60% 0px', threshold: 0 });
-    narrativeContainer.querySelectorAll('.arch-narrative').forEach(el => {
-      scrollObserver.observe(el);
-    });
-  }
-  setupScrollObserver();
-
-  // Narrative entrance animations (slide-up + fade)
-  const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  if (reduceMotion) {
-    narrativeContainer.querySelectorAll('.arch-narrative').forEach(el => el.classList.add('visible'));
-  } else {
-    const entranceObserver = new IntersectionObserver((entries) => {
-      for (const entry of entries) {
-        if (entry.isIntersecting) {
-          entry.target.classList.add('visible');
-          entranceObserver.unobserve(entry.target);
-        }
-      }
-    }, { threshold: 0.1 });
-    narrativeContainer.querySelectorAll('.arch-narrative').forEach(el => entranceObserver.observe(el));
-  }
-
   // Heatmap head tab switching + derivation toggle (event delegation)
   narrativeContainer.addEventListener('click', (e) => {
     // Head tab switching
@@ -1485,7 +1457,6 @@ export function initArchitecture({ vocab }) {
     // Reinit attention heatmap ECharts after re-render
     const attnEl = narrativeContainer.querySelector('[data-block-index="4"] .arch-narrative-data');
     if (attnEl && currentAttnMatrix) initAttnHeatmapChart(attnEl, currentAttnMatrix);
-    setupScrollObserver();
     highlightBlock(currentIndex);
   }));
 

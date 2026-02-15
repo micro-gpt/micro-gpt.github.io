@@ -1582,16 +1582,13 @@
       background: rgba(255, 255, 255, 0.05);
     }
 
-    /* Narrative entrance animations */
+    /* Show only the active narrative block; others collapse */
     .arch-narrative {
-      opacity: 0;
-      transform: translateY(16px);
-      transition: opacity 0.5s var(--ease-out), transform 0.5s var(--ease-out);
+      display: none;
     }
 
-    .arch-narrative.visible {
-      opacity: 1;
-      transform: none;
+    .arch-narrative.active {
+      display: block;
     }
 
     /* Architecture progress bar */
