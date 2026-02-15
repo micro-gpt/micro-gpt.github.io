@@ -1478,6 +1478,100 @@
       font-style: italic;
     }
 
+    /* Scale comparison note */
+    .intro-scale-note {
+      font-size: 0.8rem;
+      color: var(--text-dim);
+      margin-top: 0.75rem;
+      line-height: 1.5;
+    }
+
+    /* Section bridges */
+    .section-bridge {
+      font-size: 0.85rem;
+      color: var(--text-secondary);
+      margin-bottom: 1rem;
+      line-height: 1.5;
+    }
+
+    /* Why callouts */
+    .arch-why-callout {
+      font-size: 0.8rem;
+      color: var(--text-dim);
+      border-left: 2px solid var(--text-dim);
+      padding-left: 0.75rem;
+      margin: 0.5rem 0 0.75rem;
+      line-height: 1.5;
+    }
+
+    /* Position embedding comparison */
+    .wpe-comparison {
+      display: flex;
+      gap: 0.5rem;
+    }
+
+    .wpe-col {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .wpe-col-label {
+      display: block;
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      color: var(--text-dim);
+      text-align: center;
+      margin-bottom: 0.25rem;
+    }
+
+    /* Attention score bars */
+    .score-bars {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+      margin: 0.25rem 0;
+    }
+
+    .score-bar-row {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      min-height: 22px;
+    }
+
+    .score-bar-label {
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      color: var(--text-dim);
+      width: 2.5rem;
+      text-align: right;
+      flex-shrink: 0;
+    }
+
+    .score-bar-track {
+      flex: 1;
+      height: 14px;
+      background: rgba(0, 0, 0, 0.2);
+      border-radius: 2px;
+      overflow: hidden;
+    }
+
+    .score-bar-fill {
+      height: 100%;
+      background: var(--accent-cyan);
+      border-radius: 2px;
+      transition: width var(--transition-fast);
+    }
+
+    .score-bar-value {
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      color: var(--text-dim);
+      width: 3.5rem;
+      text-align: right;
+      flex-shrink: 0;
+    }
+
     .derivation-toggle {
       padding: 0.375rem 0;
     }
@@ -1986,6 +2080,7 @@
           <span class="stat"><strong>16</strong>-dim</span>
           <span class="stat"><strong>27</strong> vocab</span>
         </div>
+        <p class="intro-scale-note">Same architecture as GPT-2, GPT-3, and GPT-4 — just smaller. GPT-4 uses ~1,800,000,000,000 parameters. This one uses 4,064.</p>
         <button class="btn btn-secondary btn-sm btn-spaced-top" id="btn-tour">Take the tour</button>
       </div>
     </section>
@@ -2036,6 +2131,7 @@
     <section class="scroll-section" id="section-training" data-section="training">
       <div class="card">
         <h2 data-content-key="heading.trainingProgress">Training Progress</h2>
+        <p class="section-bridge">The model learns those data patterns by adjusting 4,064 parameters over 500 steps. Watch the loss decrease as it gets better at predicting the next character.</p>
         <div class="train-mode-controls" id="train-mode-controls">
           <div class="toggle-group" role="group" aria-label="Training mode">
             <button id="btn-pretrained" aria-pressed="true">Pre-trained</button>
@@ -2074,6 +2170,7 @@
     <section class="scroll-section" id="section-architecture" data-section="architecture">
       <div class="card">
         <h2 data-content-key="heading.forwardPass">Forward Pass</h2>
+        <p class="section-bridge">Training shaped the weights. Now see how a trained forward pass transforms a single token through every layer, from embedding to prediction.</p>
         <div class="input-selector" id="arch-input-selector">
           <label for="arch-token-input">Token</label>
           <input type="text" id="arch-token-input" class="token-input" maxlength="1" placeholder="a" aria-label="Type a character to use as input token" autocomplete="off">
@@ -2143,6 +2240,7 @@
     <section class="scroll-section" id="section-generation" data-section="generation">
       <div class="card">
         <h2 data-content-key="heading.nameGenerator">Name Generator</h2>
+        <p class="section-bridge">The forward pass produces a probability distribution over next tokens. Generation samples from it repeatedly, building a name character by character.</p>
         <div class="controls-row">
           <div class="control-group">
             <label for="temp-slider" data-title-key="tooltip.temperature" title="Controls randomness: lower = more predictable, higher = more creative">Temperature</label>

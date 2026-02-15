@@ -512,9 +512,12 @@ function renderAttnHeatmap(attnMatrix, vocab) {
     ).join('')}
   </div>`;
 
+  const causalNote = `<p class="arch-why-callout">${escHtml(t('attention.causal'))}</p>`;
+
   return `<div class="arch-data-section attn-heatmap-container">
     <span class="arch-data-label">Attention weights (${n}\u00d7${n}, causal)</span>
     ${tabs}
+    ${causalNote}
     <div class="attn-heatmap-echart" aria-label="Attention weight heatmap"></div>
   </div>`;
 }
@@ -580,6 +583,20 @@ function initAttnHeatmapChart(container, attnMatrix) {
   });
 }
 
+// Render horizontal score bars (for attention scoring breakdown)
+function renderScoreBars(values, label) {
+  const maxAbs = Math.max(...values.map(Math.abs), 0.001);
+  const rows = values.map((v, i) => {
+    const widthPct = (Math.abs(v) / maxAbs) * 100;
+    return `<div class="score-bar-row">
+      <span class="score-bar-label">pos ${i}</span>
+      <div class="score-bar-track"><div class="score-bar-fill" style="width:${widthPct}%"></div></div>
+      <span class="score-bar-value">${v.toFixed(3)}</span>
+    </div>`;
+  }).join('');
+  return `<div class="score-bars">${rows}</div>`;
+}
+
 // Render Q/K/V derivation (collapsible, shows matrix multiplication visually)
 function renderAttnDerivation(intermediates) {
   if (!intermediates || !intermediates.postNorm1) return '';
@@ -621,10 +638,31 @@ function renderAttnDerivation(intermediates) {
     <p class="derivation-desc">${s.desc}</p>
   </div>`).join('');
 
-  const scoresHtml = `<div class="derivation-step">
+  let scoresHtml = `<div class="derivation-step">
     <div class="derivation-label">scores = Q\u00b7K<sup>T</sup> / \u221a${4} \u2192 softmax \u2192 weights</div>
     <p class="derivation-desc">How much each position should influence the output</p>
   </div>`;
+
+  // Scoring breakdown with actual values (when position > 0 and scores available)
+  const posId = parseInt(document.getElementById('arch-pos-select')?.value || '0');
+  if (intermediates.attnScores && posId > 0) {
+    const headIdx = currentActiveHead === 'avg' ? 0 : parseInt(currentActiveHead);
+    const scores = intermediates.attnScores[headIdx];
+    if (scores) {
+      const weights = Array.from(softmax(scores));
+      const headLabel = currentActiveHead === 'avg' ? 'Head 1' : `Head ${headIdx + 1}`;
+
+      scoresHtml = `<div class="derivation-step">
+        <div class="derivation-label">Step 1: Dot products (Q\u00b7K<sup>T</sup> / \u221a4) \u2014 ${escHtml(headLabel)}</div>
+        ${renderScoreBars(scores, 'Raw scores')}
+      </div>
+      <div class="derivation-step">
+        <div class="derivation-label">Step 2: Softmax \u2192 probabilities</div>
+        ${renderScoreBars(weights, 'Attention weights')}
+        <p class="derivation-desc">Softmax turns raw scores into weights that sum to 1. Higher score = more attention.</p>
+      </div>`;
+    }
+  }
 
   return `<div class="arch-data-section derivation-container">
     <div class="collapsible-header derivation-toggle" role="button" tabindex="0" aria-expanded="false">
@@ -707,6 +745,30 @@ function renderBlockData(blockIndex, intermediates, vocab, attnWeights) {
     const values = intermediates[key];
     return values ? renderDataBars(values, label) : '';
   }).join('');
+  // "Why?" callout (only for specific blocks, not duplicates like rmsnorm1/rmsnorm2/residual2)
+  const why = t(block.id + '.why');
+  if (why && block.id !== 'rmsnorm1' && block.id !== 'rmsnorm2' && block.id !== 'residual2') {
+    html += `<p class="arch-why-callout">${escHtml(why)}</p>`;
+  }
+
+  // Position embedding comparison (show wpe rows side by side)
+  if (block.id === 'pos-embed') {
+    const sd = getStateDict();
+    if (sd?.wpe) {
+      const posId = parseInt(document.getElementById('arch-pos-select')?.value || '0');
+      const positions = [0, posId, 7].filter((v, i, a) => a.indexOf(v) === i);
+      html += `<div class="arch-data-section">
+        <span class="arch-data-label">Position signatures (wpe rows compared)</span>
+        <div class="wpe-comparison">${positions.map(p =>
+          `<div class="wpe-col">
+            <span class="wpe-col-label">pos ${p}</span>
+            ${renderDataBars(sd.wpe[p], '')}
+          </div>`
+        ).join('')}</div>
+      </div>`;
+    }
+  }
+
   if (block.id === 'attention') {
     if (currentAttnMatrix) html += renderAttnHeatmap(currentAttnMatrix, vocab);
 

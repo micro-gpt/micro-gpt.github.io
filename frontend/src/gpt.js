@@ -151,7 +151,10 @@ export function gptForward(tokenId, posId, keys, values, opts) {
       }
     }
 
-    if (capture) inter.attnLogits = headAttnLogits;
+    if (capture) {
+      inter.attnLogits = headAttnLogits;
+      inter.attnScores = headAttnLogits; // alias for scoring breakdown
+    }
     allAttnLogits.push(headAttnLogits);
 
     x = linear(xAttn, sd[`layer${li}.attn_wo`]);

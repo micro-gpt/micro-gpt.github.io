@@ -80,6 +80,16 @@ const TECHNICAL = {
   'weight.attn_wo': 'Attention Wo',
   'weight.lm_head': 'LM Head',
 
+  // Why callouts
+  'rmsnorm0.why': 'Without normalization, values can grow or shrink through layers, making training unstable. RMSNorm rescales each vector to a consistent magnitude.',
+  'residual1.why': 'Residual connections let gradients flow directly backward through the network during training. Without them, learning signals weaken as they pass through layers.',
+  'mlp.why': 'Expanding from 16 to 64 dimensions gives the network a larger space to detect non-linear patterns. Compressing back keeps the model compact.',
+  'attention.why': 'Attention lets each position decide which earlier tokens matter most for predicting the next one. Without it, every position would be processed in isolation.',
+  'pos-embed.why': 'Without position information, the model would treat "abc" and "cab" identically \u2014 it can\'t see order. Each position gets a unique learned vector.',
+
+  // Causal mask
+  'attention.causal': 'Gray cells are masked \u2014 the model can only attend to current and earlier positions, never future ones. This causal constraint enables autoregressive generation: predicting one token at a time, left to right.',
+
   // Tooltips
   'tooltip.temperature': 'Controls randomness: lower = more predictable, higher = more creative',
   'tooltip.logits': 'Raw scores before normalization \u2014 higher means the model thinks that token is more likely',
@@ -159,6 +169,16 @@ const ELI5 = {
   'weight.attn_wv': 'Value Weights',
   'weight.attn_wo': 'Output Mixer',
   'weight.lm_head': 'Letter Scorer',
+
+  // Why callouts
+  'rmsnorm0.why': 'If the numbers get too big or too small, the model gets confused and can\'t learn. Balancing keeps everything in a learnable range.',
+  'residual1.why': 'When the model is learning, it needs a clear path back to fix mistakes. The safety net gives it a shortcut to trace what went wrong.',
+  'mlp.why': 'Spreading out wide lets the model notice patterns it couldn\'t see in the narrow 16-slot view. Then it packs its findings back into 16 slots.',
+  'attention.why': 'The model needs to look back at earlier letters to know what comes next. "th" \u2192 probably "e". Without reading back, every letter is a blind guess.',
+  'pos-embed.why': 'The model needs to know if a letter is first, middle, or last. Each position gets its own stamp so "a" at position 0 looks different from "a" at position 5.',
+
+  // Causal mask
+  'attention.causal': 'Gray cells mean "no peeking ahead." When generating a name letter by letter, the model can only look at letters it has already seen \u2014 otherwise it would be cheating.',
 
   // Tooltips
   'tooltip.temperature': 'Controls how creative the model is: low = safe guesses, high = surprising choices',
