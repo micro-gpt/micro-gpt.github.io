@@ -1295,6 +1295,28 @@ export function initArchitecture({ vocab }) {
       attnHeatmapChart.resize();
     }
 
+    // Desktop: scroll SVG to center the active block
+    if (window.matchMedia('(min-width: 641px)').matches) {
+      const svgBlock = svg.querySelector(`.arch-block[data-index="${currentIndex}"]`);
+      if (svgBlock) {
+        const svgCard = container.closest('.card');
+        if (svgCard) {
+          const rect = svgBlock.querySelector('rect');
+          const blockY = parseFloat(rect.getAttribute('y'));
+          const blockH = parseFloat(rect.getAttribute('height'));
+          const centerY = blockY + blockH / 2;
+          const svgEl = svg;
+          const viewBox = svgEl.getAttribute('viewBox').split(' ').map(Number);
+          const svgTotalH = viewBox[3];
+          const containerH = svgCard.clientHeight;
+          const scale = svgCard.scrollHeight > 0 ? svgCard.scrollHeight / svgTotalH : 1;
+          const targetScroll = centerY * scale - containerH / 2;
+          const smooth = !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+          svgCard.scrollTo({ top: Math.max(0, targetScroll), behavior: smooth ? 'smooth' : 'auto' });
+        }
+      }
+    }
+
     // Update full source highlighting (if collapsible is open)
     const block = BLOCKS[currentIndex];
     const fullSourceContent = document.getElementById('arch-full-source-content');
@@ -1466,6 +1488,35 @@ export function initArchitecture({ vocab }) {
 
   // Render all narrative blocks with data
   renderNarrativeBlocks(currentIntermediates, vocab, currentAttnWeights);
+
+  // Desktop scroll-driven highlighting via IntersectionObserver
+  let scrollObserver = null;
+  const desktopMQ = window.matchMedia('(min-width: 641px)');
+
+  function setupScrollObserver() {
+    if (scrollObserver) { scrollObserver.disconnect(); scrollObserver = null; }
+    if (!desktopMQ.matches) return;
+
+    scrollObserver = new IntersectionObserver((entries) => {
+      for (const entry of entries) {
+        if (entry.isIntersecting) {
+          const idx = parseInt(entry.target.dataset.blockIndex);
+          if (!isNaN(idx)) highlightBlock(idx);
+        }
+      }
+    }, { rootMargin: '-20% 0px -60% 0px' });
+
+    narrativeContainer.querySelectorAll('.arch-narrative').forEach(el => {
+      scrollObserver.observe(el);
+    });
+  }
+
+  setupScrollObserver();
+  desktopMQ.addEventListener('change', setupScrollObserver);
+  cleanupSubs.push(() => {
+    if (scrollObserver) scrollObserver.disconnect();
+    desktopMQ.removeEventListener('change', setupScrollObserver);
+  });
 
   // Init attention heatmap ECharts
   const attnContainer = narrativeContainer.querySelector('[data-block-index="4"] .arch-narrative-data');

@@ -383,4 +383,8 @@ export function initInference({ vocab }) {
   interToggle.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleHandler(); }
   });
+
+  // Auto-generate on init so cards are populated immediately
+  const temp = parseInt(tempSlider.value) / 10;
+  generate(vocab, temp).then(() => updateTempPreview(temp));
 }

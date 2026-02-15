@@ -457,7 +457,7 @@
     .code-panel .number { color: var(--accent-orange); }
     .code-panel .decorator { color: var(--accent-cyan); }
 
-    /* Architecture split layout — diagram full-width on top, narrative below */
+    /* Architecture split layout — stacked on mobile, side-by-side on desktop */
     .arch-split {
       display: flex;
       flex-direction: column;
@@ -470,6 +470,39 @@
 
     .arch-right {
       min-width: 0;
+    }
+
+    @media (min-width: 641px) {
+      .arch-split {
+        flex-direction: row;
+        align-items: flex-start;
+      }
+
+      .arch-left {
+        position: sticky;
+        top: 4rem;
+        width: 400px;
+        flex-shrink: 0;
+        max-height: calc(100dvh - 5rem);
+        display: flex;
+        flex-direction: column;
+      }
+
+      .arch-left > .card {
+        flex: 1;
+        min-height: 0;
+        overflow-y: auto;
+      }
+
+      .arch-legend,
+      .arch-step-nav {
+        flex-shrink: 0;
+      }
+
+      .arch-right {
+        flex: 1;
+        min-width: 0;
+      }
     }
 
     /* Step navigation (Back / dots / Next) */
@@ -1488,10 +1521,12 @@
 
     /* Section bridges */
     .section-bridge {
-      font-size: 0.85rem;
+      font-size: 0.9rem;
       color: var(--text-secondary);
       margin-bottom: 1rem;
       line-height: 1.5;
+      padding-left: 1rem;
+      border-left: 2px solid var(--accent-subtle);
     }
 
     /* Why callouts */
@@ -1676,13 +1711,34 @@
       background: rgba(255, 255, 255, 0.05);
     }
 
-    /* Show only the active narrative block; others collapse */
-    .arch-narrative {
-      display: none;
+    /* Desktop: all narrative blocks visible, active one highlighted */
+    @media (min-width: 641px) {
+      .arch-narrative {
+        display: block;
+      }
+
+      .arch-narrative .card {
+        transition: opacity var(--transition-normal), box-shadow var(--transition-normal);
+      }
+
+      .arch-narrative:not(.active) .card {
+        opacity: 0.6;
+      }
+
+      .arch-narrative.active .card {
+        box-shadow: inset 3px 0 0 var(--block-color), var(--shadow-card);
+      }
     }
 
-    .arch-narrative.active {
-      display: block;
+    /* Mobile: show only the active narrative block; others collapse */
+    @media (max-width: 640px) {
+      .arch-narrative {
+        display: none;
+      }
+
+      .arch-narrative.active {
+        display: block;
+      }
     }
 
     /* Architecture progress bar */
