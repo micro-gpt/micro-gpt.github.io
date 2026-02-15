@@ -3,7 +3,7 @@
  */
 
 import { use, init } from 'echarts/core';
-import { HeatmapChart, BarChart, SankeyChart, ParallelChart, LineChart } from 'echarts/charts';
+import { HeatmapChart, BarChart, ParallelChart, LineChart } from 'echarts/charts';
 import {
   TooltipComponent,
   VisualMapComponent,
@@ -19,7 +19,6 @@ import { CanvasRenderer } from 'echarts/renderers';
 use([
   HeatmapChart,
   BarChart,
-  SankeyChart,
   ParallelChart,
   LineChart,
   TooltipComponent,
