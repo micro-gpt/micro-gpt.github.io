@@ -2137,6 +2137,7 @@
           <span class="stat"><strong>27</strong> vocab</span>
         </div>
         <p class="intro-scale-note">Same architecture as GPT-2, GPT-3, and GPT-4 — just smaller. GPT-4 uses ~1,800,000,000,000 parameters. This one uses 4,064.</p>
+        <p class="intro-scale-note">No PyTorch, no TensorFlow — just 199 lines of pure Python implementing tokenization, attention, training, and generation from scratch. As Karpathy put it: <em>"This file is the complete algorithm. Everything else is just efficiency."</em> Every number below is computed live in your browser.</p>
         <button class="btn btn-secondary btn-sm btn-spaced-top" id="btn-tour">Take the tour</button>
       </div>
     </section>
@@ -2159,7 +2160,7 @@
     <section class="scroll-section" id="section-data" data-section="data">
       <div class="card">
         <h2>Data Explorer</h2>
-        <p class="arch-detail-desc">Explore the 32K training names and the patterns the model learns from</p>
+        <p class="section-bridge">Every language model starts with data. These 32,033 names are all the model ever sees — the statistical patterns here (which letters follow which, how names begin and end, typical lengths) become the model's entire knowledge of language.</p>
         <div class="controls-row" id="data-search-row">
           <div class="control-group">
             <label for="data-search-input">Search names</label>
@@ -2187,7 +2188,7 @@
     <section class="scroll-section" id="section-training" data-section="training">
       <div class="card">
         <h2 data-content-key="heading.trainingProgress">Training Progress</h2>
-        <p class="section-bridge">The model learns those data patterns by adjusting 4,064 parameters over 500 steps. Watch the loss decrease as it gets better at predicting the next character.</p>
+        <p class="section-bridge">The model learns those data patterns through the same process used for billion-parameter models: gradient descent. Over 500 steps, the optimizer adjusts all 4,064 parameters to minimize prediction error. Watch the loss decrease as the model goes from random guessing to plausible names.</p>
         <div class="train-mode-controls" id="train-mode-controls">
           <div class="toggle-group" role="group" aria-label="Training mode">
             <button id="btn-pretrained" aria-pressed="true">Pre-trained</button>
@@ -2226,7 +2227,7 @@
     <section class="scroll-section" id="section-architecture" data-section="architecture">
       <div class="card">
         <h2 data-content-key="heading.forwardPass">Forward Pass</h2>
-        <p class="section-bridge">Training shaped the weights. Now see how a trained forward pass transforms a single token through every layer, from embedding to prediction.</p>
+        <p class="section-bridge">Training shaped the weights. Now see how the model actually thinks: a forward pass transforms a single token through the same embed → attend → transform → predict pipeline used by every GPT, from the original 117M-parameter GPT-2 to today's trillion-parameter models. The only difference is scale.</p>
         <div class="input-selector" id="arch-input-selector">
           <label for="arch-token-input">Token</label>
           <input type="text" id="arch-token-input" class="token-input" maxlength="1" placeholder="a" aria-label="Type a character to use as input token" autocomplete="off">
@@ -2296,7 +2297,7 @@
     <section class="scroll-section" id="section-generation" data-section="generation">
       <div class="card">
         <h2 data-content-key="heading.nameGenerator">Name Generator</h2>
-        <p class="section-bridge">The forward pass produces a probability distribution over next tokens. Generation samples from it repeatedly, building a name character by character.</p>
+        <p class="section-bridge">This is how all autoregressive language models generate text — the same loop ChatGPT runs billions of times. Each step: run the forward pass, get a probability distribution, sample one token, feed it back in. Character by character, a name emerges.</p>
         <div class="controls-row">
           <div class="control-group">
             <label for="temp-slider" data-title-key="tooltip.temperature" title="Controls randomness: lower = more predictable, higher = more creative">Temperature</label>
