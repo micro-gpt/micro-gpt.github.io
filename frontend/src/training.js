@@ -8,8 +8,6 @@ import { get, set, subscribe } from './state.js';
 import { t } from './content.js';
 import { createChart, FONT_FAMILY } from './echarts-setup.js';
 
-const SVG_NS = 'http://www.w3.org/2000/svg';
-
 let checkpointWeights = null;
 let currentCheckpointStep = 500;
 const CHECKPOINT_STEPS = [1, 10, 50, 100, 200, 300, 400, 500];
@@ -76,7 +74,7 @@ function matrixToHeatmapData(matrix) {
 function renderWeightInspector(stateDict) {
   const container = document.getElementById('weight-inspector');
   if (!stateDict) {
-    container.innerHTML = '<p style="color:var(--text-dim);font-size:0.85rem">No weights loaded</p>';
+    container.innerHTML = '<p class="inter-empty">No weights loaded</p>';
     disposeWeightCharts();
     return;
   }
@@ -88,10 +86,15 @@ function renderWeightInspector(stateDict) {
       const label = t(tKey);
       return `<div class="weight-heatmap">
         <div class="heatmap-label">${label}</div>
-        <div data-weight-chart="${key}" style="height:${Math.max(dims[0] * 10, 160)}px" aria-label="${label} weight matrix"></div>
+        <div data-weight-chart="${key}" aria-label="${label} weight matrix"></div>
         <div class="dims">${dims[0]} × ${dims[1]}</div>
       </div>`;
     }).join('') + '</div>';
+    // Set dynamic heights via JS
+    for (const { key, dims } of WEIGHT_MATRICES) {
+      const el = container.querySelector(`[data-weight-chart="${key}"]`);
+      if (el) el.style.height = `${Math.max(dims[0] * 10, 160)}px`;
+    }
     disposeWeightCharts();
   }
 
@@ -108,6 +111,9 @@ function renderWeightInspector(stateDict) {
     const rows = dims[0];
     const cols = dims[1];
 
+    const showLabels = rows > 4;
+    const labelInterval = rows > 16 ? 1 : 0;
+
     weightCharts[key].setOption({
       tooltip: {
         formatter: (params) => {
@@ -118,22 +124,29 @@ function renderWeightInspector(stateDict) {
       xAxis: {
         type: 'category',
         data: Array.from({ length: cols }, (_, i) => i),
-        axisLabel: { show: false },
+        axisLabel: { show: showLabels, fontSize: 9, fontFamily: 'monospace', color: '#6B7585', interval: labelInterval },
         axisTick: { show: false },
         splitArea: { show: false },
       },
       yAxis: {
         type: 'category',
         data: Array.from({ length: rows }, (_, i) => i),
-        axisLabel: { show: false },
+        axisLabel: { show: showLabels, fontSize: 9, fontFamily: 'monospace', color: '#6B7585', interval: labelInterval },
         axisTick: { show: false },
         splitArea: { show: false },
         inverse: true,
       },
       visualMap: {
-        show: false,
+        show: true,
         min: -absMax,
         max: absMax,
+        orient: 'horizontal',
+        left: 'center',
+        bottom: 0,
+        itemWidth: 12,
+        itemHeight: 60,
+        text: ['+', '\u2212'],
+        textStyle: { color: '#6B7585', fontSize: 9 },
         inRange: {
           color: ['#F87171', '#3D1515', '#141926', '#152850', '#5B8DEF'],
         },
@@ -146,7 +159,7 @@ function renderWeightInspector(stateDict) {
         },
         animationDuration: 400,
       }],
-      grid: { left: 4, right: 4, top: 4, bottom: 4 },
+      grid: { left: showLabels ? 24 : 4, right: 8, top: 8, bottom: 28 },
     }, true);
   }
 }
@@ -203,7 +216,7 @@ function drawHeatmapDiff(canvas, matrix, prevMatrix) {
 
 function renderWeightFilmstrip(container, allCheckpointWeights, vocabSize) {
   if (!allCheckpointWeights) {
-    container.innerHTML = '<p style="color:var(--text-dim);font-size:0.85rem">Loading checkpoint weights...</p>';
+    container.innerHTML = '<p class="inter-empty">Loading checkpoint weights...</p>';
     return;
   }
 
@@ -344,316 +357,147 @@ function drawFilmstripCanvases(container, allCheckpointWeights, vocabSize, steps
   }
 }
 
-// --- Loss Curve SVG ---
-function createTrainingSVG(trainingLog) {
-  const w = 800;
-  const h = 300;
-  const padL = 55;
-  const padR = 55;
-  const padT = 20;
-  const padB = 40;
-  const plotW = w - padL - padR;
-  const plotH = h - padT - padB;
+// --- Loss Curve (ECharts) ---
+let lossCurveChart = null;
 
-  const maxStep = trainingLog.length;
-  const maxLoss = Math.ceil(Math.max(...trainingLog.map(d => d.loss)));
-  const maxLR = Math.max(...trainingLog.map(d => d.lr));
-
-  const xScale = (step) => padL + ((step - 1) / (maxStep - 1)) * plotW;
-  const yLoss = (loss) => padT + (1 - loss / maxLoss) * plotH;
-  const yLR = (lr) => padT + (1 - lr / maxLR) * plotH;
-
-  const svg = document.createElementNS(SVG_NS, 'svg');
-  svg.setAttribute('viewBox', `0 0 ${w} ${h}`);
-  svg.setAttribute('width', '100%');
-  svg.setAttribute('height', h);
-  svg.setAttribute('aria-label', `Training loss curve over ${maxStep} steps`);
-  svg.setAttribute('role', 'img');
-  svg.style.maxWidth = `${w}px`;
-
-  // Grid lines
-  for (let i = 0; i <= 4; i++) {
-    const yVal = (i / 4) * maxLoss;
-    const y = yLoss(yVal);
-    const line = document.createElementNS(SVG_NS, 'line');
-    line.setAttribute('x1', padL);
-    line.setAttribute('y1', y);
-    line.setAttribute('x2', w - padR);
-    line.setAttribute('y2', y);
-    line.setAttribute('stroke', '#1E2433');
-    line.setAttribute('stroke-width', '1');
-    svg.appendChild(line);
-
-    const label = document.createElementNS(SVG_NS, 'text');
-    label.setAttribute('x', padL - 8);
-    label.setAttribute('y', y + 4);
-    label.setAttribute('text-anchor', 'end');
-    label.setAttribute('fill', '#6B7585');
-    label.setAttribute('font-size', '11');
-    label.setAttribute('font-family', '-apple-system, BlinkMacSystemFont, sans-serif');
-    label.textContent = yVal.toFixed(1);
-    svg.appendChild(label);
-  }
-
-  // X axis labels
-  for (let s = 0; s <= 500; s += 100) {
-    if (s === 0) continue;
-    const x = xScale(s);
-    const label = document.createElementNS(SVG_NS, 'text');
-    label.setAttribute('x', x);
-    label.setAttribute('y', h - 8);
-    label.setAttribute('text-anchor', 'middle');
-    label.setAttribute('fill', '#6B7585');
-    label.setAttribute('font-size', '11');
-    label.setAttribute('font-family', '-apple-system, BlinkMacSystemFont, sans-serif');
-    label.textContent = s;
-    svg.appendChild(label);
-  }
-
-  // Axis labels
-  const lossLabel = document.createElementNS(SVG_NS, 'text');
-  lossLabel.setAttribute('x', 14);
-  lossLabel.setAttribute('y', padT + plotH / 2);
-  lossLabel.setAttribute('text-anchor', 'middle');
-  lossLabel.setAttribute('transform', `rotate(-90, 14, ${padT + plotH / 2})`);
-  lossLabel.setAttribute('fill', '#5B8DEF');
-  lossLabel.setAttribute('font-size', '12');
-  lossLabel.setAttribute('font-weight', '600');
-  lossLabel.setAttribute('font-family', '-apple-system, BlinkMacSystemFont, sans-serif');
-  lossLabel.textContent = 'Loss';
-  svg.appendChild(lossLabel);
-
-  const lrLabel = document.createElementNS(SVG_NS, 'text');
-  lrLabel.setAttribute('x', w - 14);
-  lrLabel.setAttribute('y', padT + plotH / 2);
-  lrLabel.setAttribute('text-anchor', 'middle');
-  lrLabel.setAttribute('transform', `rotate(90, ${w - 14}, ${padT + plotH / 2})`);
-  lrLabel.setAttribute('fill', '#9B7AEA');
-  lrLabel.setAttribute('font-size', '12');
-  lrLabel.setAttribute('font-weight', '600');
-  lrLabel.setAttribute('font-family', '-apple-system, BlinkMacSystemFont, sans-serif');
-  lrLabel.textContent = 'Learning Rate';
-  svg.appendChild(lrLabel);
-
-  // LR curve
-  let lrPathD = '';
-  trainingLog.forEach((d, i) => {
-    const x = xScale(d.step);
-    const y = yLR(d.lr);
-    lrPathD += i === 0 ? `M${x},${y}` : `L${x},${y}`;
-  });
-  const lrPath = document.createElementNS(SVG_NS, 'path');
-  lrPath.setAttribute('d', lrPathD);
-  lrPath.setAttribute('fill', 'none');
-  lrPath.setAttribute('stroke', '#9B7AEA');
-  lrPath.setAttribute('stroke-width', '1.5');
-  lrPath.setAttribute('opacity', '0.5');
-  svg.appendChild(lrPath);
-
-  // Loss curve
-  let lossPathD = '';
-  trainingLog.forEach((d, i) => {
-    const x = xScale(d.step);
-    const y = yLoss(d.loss);
-    lossPathD += i === 0 ? `M${x},${y}` : `L${x},${y}`;
-  });
-  const lossPath = document.createElementNS(SVG_NS, 'path');
-  lossPath.setAttribute('d', lossPathD);
-  lossPath.setAttribute('fill', 'none');
-  lossPath.setAttribute('stroke', '#5B8DEF');
-  lossPath.setAttribute('stroke-width', '2');
-  lossPath.id = 'loss-path';
-  svg.appendChild(lossPath);
-
-  // Draw-on animation
+function lossCurveBaseOption(trainingLog) {
   const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  if (!reduceMotion) {
-    for (const path of [lossPath, lrPath]) {
-      const len = path.getTotalLength();
-      path.style.strokeDasharray = len;
-      path.style.strokeDashoffset = len;
-      path.style.transition = 'stroke-dashoffset 2s ease-out';
-      requestAnimationFrame(() => { path.style.strokeDashoffset = '0'; });
-    }
-  }
+  const steps = trainingLog.map(d => d.step);
+  const losses = trainingLog.map(d => d.loss);
+  const lrs = trainingLog.map(d => d.lr);
+  const maxLoss = Math.ceil(Math.max(...losses));
 
-  // Checkpoint markers
-  for (const cp of CHECKPOINT_STEPS) {
-    const entry = trainingLog[cp - 1];
-    if (!entry) continue;
-    const cx = xScale(cp);
-    const cy = yLoss(entry.loss);
-
-    const g = document.createElementNS(SVG_NS, 'g');
-    g.setAttribute('class', 'checkpoint-marker');
-    g.setAttribute('data-step', cp);
-    g.setAttribute('role', 'button');
-    g.setAttribute('tabindex', '0');
-    g.setAttribute('aria-label', `Checkpoint at step ${cp}, loss ${entry.loss.toFixed(2)}`);
-
-    const markerLine = document.createElementNS(SVG_NS, 'line');
-    markerLine.setAttribute('x1', cx);
-    markerLine.setAttribute('y1', padT);
-    markerLine.setAttribute('x2', cx);
-    markerLine.setAttribute('y2', padT + plotH);
-    markerLine.setAttribute('stroke', '#5B8DEF');
-    markerLine.setAttribute('stroke-width', '1');
-    markerLine.setAttribute('opacity', '0.2');
-    markerLine.setAttribute('stroke-dasharray', '3 3');
-    g.appendChild(markerLine);
-
-    const dot = document.createElementNS(SVG_NS, 'circle');
-    dot.setAttribute('cx', cx);
-    dot.setAttribute('cy', cy);
-    dot.setAttribute('r', '4');
-    dot.setAttribute('fill', '#5B8DEF');
-    dot.setAttribute('stroke', '#0B0F1A');
-    dot.setAttribute('stroke-width', '1.5');
-    g.appendChild(dot);
-
-    const label = document.createElementNS(SVG_NS, 'text');
-    label.setAttribute('x', cx);
-    label.setAttribute('y', padT - 6);
-    label.setAttribute('text-anchor', 'middle');
-    label.setAttribute('fill', '#6B7585');
-    label.setAttribute('font-size', '9');
-    label.setAttribute('font-family', '-apple-system, BlinkMacSystemFont, sans-serif');
-    label.textContent = cp;
-    g.appendChild(label);
-
-    svg.appendChild(g);
-  }
-
-  // Scrubber
-  const scrubLine = document.createElementNS(SVG_NS, 'line');
-  scrubLine.setAttribute('y1', padT);
-  scrubLine.setAttribute('y2', padT + plotH);
-  scrubLine.setAttribute('stroke', '#E8ECF1');
-  scrubLine.setAttribute('stroke-width', '1');
-  scrubLine.setAttribute('opacity', '0.4');
-  scrubLine.setAttribute('stroke-dasharray', '4 3');
-  scrubLine.id = 'scrub-line';
-  svg.appendChild(scrubLine);
-
-  const scrubDot = document.createElementNS(SVG_NS, 'circle');
-  scrubDot.setAttribute('r', '5');
-  scrubDot.setAttribute('fill', '#5B8DEF');
-  scrubDot.setAttribute('stroke', '#E8ECF1');
-  scrubDot.setAttribute('stroke-width', '2');
-  scrubDot.id = 'scrub-dot';
-  svg.appendChild(scrubDot);
-
-  return { svg, xScale, yLoss, yLR, maxStep, maxLoss, maxLR, lossPath, lrPath };
+  return {
+    tooltip: {
+      trigger: 'axis',
+      axisPointer: { type: 'cross', lineStyle: { color: '#E8ECF1', opacity: 0.4 } },
+      formatter: (params) => {
+        const step = params[0]?.axisValue;
+        const loss = params.find(p => p.seriesName === 'Loss');
+        const lr = params.find(p => p.seriesName === 'Learning Rate');
+        return `<span style="font-family:monospace;font-size:12px">Step <strong>${step}</strong><br/>Loss: <strong>${loss ? loss.value.toFixed(4) : '—'}</strong><br/>LR: <strong>${lr ? lr.value.toFixed(6) : '—'}</strong></span>`;
+      },
+    },
+    grid: { left: 60, right: 60, top: 20, bottom: 40 },
+    xAxis: {
+      type: 'category',
+      data: steps,
+      axisLabel: { interval: 99, formatter: v => v > 0 ? v : '' },
+    },
+    yAxis: [
+      { type: 'value', name: 'Loss', nameTextStyle: { color: '#5B8DEF', fontWeight: 600, fontSize: 12 }, max: maxLoss, splitNumber: 4 },
+      { type: 'value', name: 'Learning Rate', nameTextStyle: { color: '#9B7AEA', fontWeight: 600, fontSize: 12 }, position: 'right', splitLine: { show: false } },
+    ],
+    series: [
+      {
+        name: 'Loss',
+        type: 'line',
+        data: losses,
+        yAxisIndex: 0,
+        showSymbol: false,
+        lineStyle: { color: '#5B8DEF', width: 2 },
+        itemStyle: { color: '#5B8DEF' },
+        animationDuration: reduceMotion ? 0 : 2000,
+        markPoint: {
+          symbol: 'circle',
+          symbolSize: 10,
+          data: CHECKPOINT_STEPS.map(cp => {
+            const entry = trainingLog[cp - 1];
+            if (!entry) return null;
+            return { coord: [cp - 1, entry.loss], name: String(cp), value: cp };
+          }).filter(Boolean),
+          label: { show: true, position: 'top', fontSize: 9, color: '#6B7585', formatter: p => p.value },
+          itemStyle: { color: '#5B8DEF', borderColor: '#0B0F1A', borderWidth: 1.5 },
+        },
+      },
+      {
+        name: 'Learning Rate',
+        type: 'line',
+        data: lrs,
+        yAxisIndex: 1,
+        showSymbol: false,
+        lineStyle: { color: '#9B7AEA', width: 1.5, opacity: 0.5 },
+        itemStyle: { color: '#9B7AEA' },
+        animationDuration: reduceMotion ? 0 : 2000,
+      },
+    ],
+  };
 }
 
-// --- Live loss curve (for training from scratch) ---
-function createLiveChart() {
-  const w = 800, h = 300;
-  const padL = 55, padR = 55, padT = 20, padB = 40;
-  const plotW = w - padL - padR;
-  const plotH = h - padT - padB;
-  const maxStep = 500;
-  const maxLoss = 4; // initial estimate, may increase
+function createPretrainedChart(container, trainingLog) {
+  container.innerHTML = '<div class="loss-curve-chart" aria-label="Training loss curve over 500 steps"></div>';
+  const el = container.querySelector('.loss-curve-chart');
+  el.style.height = '300px';
 
-  const svg = document.createElementNS(SVG_NS, 'svg');
-  svg.setAttribute('viewBox', `0 0 ${w} ${h}`);
-  svg.setAttribute('width', '100%');
-  svg.setAttribute('height', h);
-  svg.setAttribute('aria-label', 'Live training loss curve');
-  svg.setAttribute('role', 'img');
-  svg.style.maxWidth = `${w}px`;
+  lossCurveChart = createChart(el);
+  const option = lossCurveBaseOption(trainingLog);
+  lossCurveChart.setOption(option);
+  return lossCurveChart;
+}
 
-  // Grid
-  for (let i = 0; i <= 4; i++) {
-    const yVal = (i / 4) * maxLoss;
-    const y = padT + (1 - yVal / maxLoss) * plotH;
-    const line = document.createElementNS(SVG_NS, 'line');
-    line.setAttribute('x1', padL);
-    line.setAttribute('y1', y);
-    line.setAttribute('x2', w - padR);
-    line.setAttribute('y2', y);
-    line.setAttribute('stroke', '#1E2433');
-    svg.appendChild(line);
+function setScrubberPosition(chart, step, trainingLog) {
+  const entry = trainingLog[step - 1];
+  if (!chart || !entry) return;
+  chart.setOption({
+    series: [{
+      markLine: {
+        silent: true,
+        symbol: 'none',
+        lineStyle: { color: '#E8ECF1', type: 'dashed', width: 1, opacity: 0.4 },
+        data: [{ xAxis: step - 1 }],
+        label: { show: false },
+        animation: false,
+      },
+    }],
+  });
+}
 
-    const label = document.createElementNS(SVG_NS, 'text');
-    label.setAttribute('x', padL - 8);
-    label.setAttribute('y', y + 4);
-    label.setAttribute('text-anchor', 'end');
-    label.setAttribute('fill', '#6B7585');
-    label.setAttribute('font-size', '11');
-    label.setAttribute('font-family', '-apple-system, BlinkMacSystemFont, sans-serif');
-    label.textContent = yVal.toFixed(1);
-    svg.appendChild(label);
-  }
+function createLiveChart(container) {
+  container.innerHTML = '<div class="loss-curve-chart" aria-label="Live training loss curve"></div>';
+  const el = container.querySelector('.loss-curve-chart');
+  el.style.height = '300px';
 
-  for (let s = 100; s <= 500; s += 100) {
-    const x = padL + ((s - 1) / (maxStep - 1)) * plotW;
-    const label = document.createElementNS(SVG_NS, 'text');
-    label.setAttribute('x', x);
-    label.setAttribute('y', h - 8);
-    label.setAttribute('text-anchor', 'middle');
-    label.setAttribute('fill', '#6B7585');
-    label.setAttribute('font-size', '11');
-    label.setAttribute('font-family', '-apple-system, BlinkMacSystemFont, sans-serif');
-    label.textContent = s;
-    svg.appendChild(label);
-  }
+  lossCurveChart = createChart(el);
 
-  // Axis labels
-  const lossLabel = document.createElementNS(SVG_NS, 'text');
-  lossLabel.setAttribute('x', 14);
-  lossLabel.setAttribute('y', padT + plotH / 2);
-  lossLabel.setAttribute('text-anchor', 'middle');
-  lossLabel.setAttribute('transform', `rotate(-90, 14, ${padT + plotH / 2})`);
-  lossLabel.setAttribute('fill', '#5B8DEF');
-  lossLabel.setAttribute('font-size', '12');
-  lossLabel.setAttribute('font-weight', '600');
-  lossLabel.setAttribute('font-family', '-apple-system, BlinkMacSystemFont, sans-serif');
-  lossLabel.textContent = 'Loss';
-  svg.appendChild(lossLabel);
+  const lossData = [];
+  const lrData = [];
+  const steps = [];
 
-  // Loss path (starts empty, appended to as steps come in)
-  const lossPath = document.createElementNS(SVG_NS, 'path');
-  lossPath.setAttribute('fill', 'none');
-  lossPath.setAttribute('stroke', '#5B8DEF');
-  lossPath.setAttribute('stroke-width', '2');
-  svg.appendChild(lossPath);
-
-  // LR path
-  const lrPath = document.createElementNS(SVG_NS, 'path');
-  lrPath.setAttribute('fill', 'none');
-  lrPath.setAttribute('stroke', '#9B7AEA');
-  lrPath.setAttribute('stroke-width', '1.5');
-  lrPath.setAttribute('opacity', '0.5');
-  svg.appendChild(lrPath);
-
-  const lrLabel = document.createElementNS(SVG_NS, 'text');
-  lrLabel.setAttribute('x', w - 14);
-  lrLabel.setAttribute('y', padT + plotH / 2);
-  lrLabel.setAttribute('text-anchor', 'middle');
-  lrLabel.setAttribute('transform', `rotate(90, ${w - 14}, ${padT + plotH / 2})`);
-  lrLabel.setAttribute('fill', '#9B7AEA');
-  lrLabel.setAttribute('font-size', '12');
-  lrLabel.setAttribute('font-weight', '600');
-  lrLabel.setAttribute('font-family', '-apple-system, BlinkMacSystemFont, sans-serif');
-  lrLabel.textContent = 'Learning Rate';
-  svg.appendChild(lrLabel);
-
-  const maxLR = 0.01;
-  let lossD = '';
-  let lrD = '';
+  lossCurveChart.setOption({
+    tooltip: {
+      trigger: 'axis',
+      axisPointer: { type: 'cross', lineStyle: { color: '#E8ECF1', opacity: 0.4 } },
+      formatter: (params) => {
+        const step = params[0]?.axisValue;
+        const loss = params.find(p => p.seriesName === 'Loss');
+        const lr = params.find(p => p.seriesName === 'Learning Rate');
+        return `<span style="font-family:monospace;font-size:12px">Step <strong>${step}</strong><br/>Loss: <strong>${loss ? loss.value.toFixed(4) : '—'}</strong><br/>LR: <strong>${lr ? lr.value.toFixed(6) : '—'}</strong></span>`;
+      },
+    },
+    grid: { left: 60, right: 60, top: 20, bottom: 40 },
+    xAxis: { type: 'category', data: steps },
+    yAxis: [
+      { type: 'value', name: 'Loss', nameTextStyle: { color: '#5B8DEF', fontWeight: 600, fontSize: 12 }, max: 4, splitNumber: 4 },
+      { type: 'value', name: 'Learning Rate', nameTextStyle: { color: '#9B7AEA', fontWeight: 600, fontSize: 12 }, position: 'right', splitLine: { show: false } },
+    ],
+    series: [
+      { name: 'Loss', type: 'line', data: lossData, yAxisIndex: 0, showSymbol: false, lineStyle: { color: '#5B8DEF', width: 2 }, itemStyle: { color: '#5B8DEF' } },
+      { name: 'Learning Rate', type: 'line', data: lrData, yAxisIndex: 1, showSymbol: false, lineStyle: { color: '#9B7AEA', width: 1.5, opacity: 0.5 }, itemStyle: { color: '#9B7AEA' } },
+    ],
+    animation: false,
+  });
 
   function addPoint(step, loss, lr) {
-    const x = padL + ((step - 1) / (maxStep - 1)) * plotW;
-    const yL = padT + (1 - Math.min(loss, maxLoss) / maxLoss) * plotH;
-    const yR = padT + (1 - lr / maxLR) * plotH;
-    lossD += lossD === '' ? `M${x},${yL}` : `L${x},${yL}`;
-    lrD += lrD === '' ? `M${x},${yR}` : `L${x},${yR}`;
-    lossPath.setAttribute('d', lossD);
-    lrPath.setAttribute('d', lrD);
+    steps.push(step);
+    lossData.push(loss);
+    lrData.push(lr);
+    lossCurveChart.setOption({
+      xAxis: { data: steps },
+      series: [{ data: lossData }, { data: lrData }],
+    });
   }
 
-  return { svg, addPoint };
+  return { chart: lossCurveChart, addPoint };
 }
 
 function renderCheckpoints(checkpoints, activeStep, trainingLog) {
@@ -667,7 +511,7 @@ function renderCheckpoints(checkpoints, activeStep, trainingLog) {
     const lossEntry = trainingLog ? trainingLog[step - 1] : null;
     const lossStr = lossEntry ? `Loss: ${lossEntry.loss.toFixed(3)}` : '';
     return `
-      <div class="checkpoint-card ${isCurrent ? 'active' : ''}" ${!isActive ? 'style="opacity:0.4"' : ''}>
+      <div class="checkpoint-card ${isCurrent ? 'active' : ''}${!isActive ? ' checkpoint-inactive' : ''}">
         <div class="step-label">Step ${step}</div>
         ${lossStr ? `<div class="loss-value">${lossStr}</div>` : ''}
         <div class="names">${names.join('\n')}</div>
@@ -700,24 +544,24 @@ export function initTraining({ trainingLog, checkpoints, vocab, weights }, onWei
     mode = 'pretrained';
     btnPretrained.setAttribute('aria-pressed', 'true');
     btnTrainScratch.setAttribute('aria-pressed', 'false');
-    trainStatus.style.display = 'none';
+    trainStatus.classList.add('train-status-hidden');
     sliderRow.style.display = 'flex';
 
     if (worker) { worker.terminate(); worker = null; }
     if (filmstripTimer) { clearInterval(filmstripTimer); filmstripTimer = null; filmstripPlaying = false; }
+    if (lossCurveChart) { lossCurveChart.dispose(); lossCurveChart = null; }
 
     // Restore original weights when entering pretrained mode
     loadWeights(weights, vocabSize);
 
-    const { svg, xScale, yLoss } = createTrainingSVG(trainingLog);
-    svgContainer.innerHTML = '';
-    svgContainer.appendChild(svg);
+    const chart = createPretrainedChart(svgContainer, trainingLog);
 
     set('trainingStep', 500);
     currentCheckpointStep = 500;
     activeFilmstripStep = 500;
     renderCheckpoints(checkpoints, 500, trainingLog);
-    updateScrubber(500);
+    setScrubberPosition(chart, 500, trainingLog);
+    stepValue.textContent = 500;
 
     // Re-render weight inspector with pre-trained weights
     renderWeightInspector(getStateDict());
@@ -739,26 +583,15 @@ export function initTraining({ trainingLog, checkpoints, vocab, weights }, onWei
       renderWeightFilmstrip(weightInspector, checkpointWeights, vocabSize);
     }
 
-    function updateScrubber(step) {
-      const entry = trainingLog[step - 1];
-      const x = xScale(entry.step);
-      const y = yLoss(entry.loss);
-      document.getElementById('scrub-line').setAttribute('x1', x);
-      document.getElementById('scrub-line').setAttribute('x2', x);
-      document.getElementById('scrub-dot').setAttribute('cx', x);
-      document.getElementById('scrub-dot').setAttribute('cy', y);
-      stepValue.textContent = step;
-      renderCheckpoints(checkpoints, step, trainingLog);
-    }
-
-    // Checkpoint marker clicks on SVG
-    svg.addEventListener('click', (e) => {
-      const marker = e.target.closest('.checkpoint-marker');
-      if (!marker || !checkpointWeights) return;
-      const step = parseInt(marker.dataset.step);
+    // Checkpoint marker clicks on ECharts
+    chart.on('click', 'markPoint', (params) => {
+      if (!checkpointWeights) return;
+      const step = params.value;
       slider.value = step - 1;
       set('trainingStep', step);
-      updateScrubber(step);
+      setScrubberPosition(chart, step, trainingLog);
+      stepValue.textContent = step;
+      renderCheckpoints(checkpoints, step, trainingLog);
       currentCheckpointStep = step;
       activeFilmstripStep = step;
       loadWeights(checkpointWeights[String(step)], vocabSize);
@@ -773,7 +606,9 @@ export function initTraining({ trainingLog, checkpoints, vocab, weights }, onWei
     slider.addEventListener('input', () => {
       const step = parseInt(slider.value) + 1;
       set('trainingStep', step);
-      updateScrubber(step);
+      setScrubberPosition(chart, step, trainingLog);
+      stepValue.textContent = step;
+      renderCheckpoints(checkpoints, step, trainingLog);
 
       if (!checkpointWeights) return;
       const cp = nearestCheckpoint(step);
@@ -792,16 +627,16 @@ export function initTraining({ trainingLog, checkpoints, vocab, weights }, onWei
     mode = 'live';
     btnPretrained.setAttribute('aria-pressed', 'false');
     btnTrainScratch.setAttribute('aria-pressed', 'true');
-    trainStatus.style.display = 'flex';
+    trainStatus.classList.remove('train-status-hidden');
     sliderRow.style.display = 'none';
     set('trainingStep', 0);
     liveCheckpoints = {};
     renderCheckpoints({}, 0, null);
 
+    if (lossCurveChart) { lossCurveChart.dispose(); lossCurveChart = null; }
+
     // Create live chart
-    liveChart = createLiveChart();
-    svgContainer.innerHTML = '';
-    svgContainer.appendChild(liveChart.svg);
+    liveChart = createLiveChart(svgContainer);
 
     // Clear weight inspector
     renderWeightInspector(null);

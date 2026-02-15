@@ -243,7 +243,7 @@ function clearArcs() {
 function renderIntermediateViewer(intermediates) {
   const content = document.getElementById('infer-inter-content');
   if (!intermediates) {
-    content.innerHTML = '<p style="color:var(--text-dim);font-size:0.85rem;padding:0.5rem">Run a generation step to see intermediate values.</p>';
+    content.innerHTML = '<p class="inter-empty">Run a generation step to see intermediate values.</p>';
     return;
   }
 
@@ -268,13 +268,13 @@ function renderIntermediateViewer(intermediates) {
     }).join('');
 
     const borderColor = BLOCK_COLORS[key] || 'var(--text-dim)';
-    return `<div class="data-viewer inter-block" style="border-left-color:${borderColor};margin-bottom:0.5rem">
+    return `<div class="data-viewer inter-block" style="border-left-color:${borderColor}">
       <div class="vector-label">${label} [${values.length}]</div>
       <div class="values-grid">${cells}</div>
     </div>`;
   }).filter(Boolean).join('');
 
-  content.innerHTML = html || '<p style="color:var(--text-dim);font-size:0.85rem;padding:0.5rem">No intermediate data available.</p>';
+  content.innerHTML = html || '<p class="inter-empty">No intermediate data available.</p>';
 }
 
 async function generate(vocab, temperature) {
@@ -336,13 +336,15 @@ async function generate(vocab, temperature) {
     }
   }
 
-  // Final state — select last token
+  // Final state — select last token, stop cursor blink
   selectedTokenIdx = storedTokens.length - 1;
   generating = false;
+  const cursor = output.querySelector('.cursor');
+  if (cursor) cursor.classList.add('done');
   renderAttnTokens();
 
   if (generatedTokens.length === 0) {
-    output.innerHTML = '<span style="color:var(--text-dim)">(empty)</span>';
+    output.innerHTML = '<span class="inter-empty">(empty)</span>';
   } else {
     output.innerHTML = generatedTokens.map((t, i) =>
       `<span class="gen-token" data-token="${t}" data-pos="${i}">${chars[t]}</span>`

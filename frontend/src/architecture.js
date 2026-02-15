@@ -9,6 +9,7 @@ import { get, set, subscribe } from './state.js';
 import { t } from './content.js';
 import { initFlowChart, updateFlowChart } from './flow-chart.js';
 import { initEmbeddingChart } from './embedding-chart.js';
+import { createChart, monoTooltip } from './echarts-setup.js';
 
 const BLOCKS = [
   { id: 'tok-embed', label: 'Token Embed', color: '#5B8DEF', dimOut: '16-dim', interKey: 'tokEmb', lines: [109, 109] },
@@ -54,10 +55,7 @@ const HEAD_COLORS_HEX = ['#5B8DEF', '#9B7AEA', '#4ADE80', '#22D3EE'];
 
 let currentAttnMatrix = null; // Full attention matrix: [pos][head][targetPos] = weight
 let currentActiveHead = 'avg'; // Active head tab for heatmap
-
-function hexToRgb(hex) {
-  return `${parseInt(hex.slice(1, 3), 16)}, ${parseInt(hex.slice(3, 5), 16)}, ${parseInt(hex.slice(5, 7), 16)}`;
-}
+let attnHeatmapChart = null; // ECharts instance for attention heatmap
 
 // --- Full microgpt.py source (embedded) ---
 const MICROGPT_SOURCE = `"""
@@ -468,25 +466,44 @@ function renderProbBars(probs, vocab) {
   return `<div class="arch-data-section"><span class="arch-data-label">Top 10 token probabilities</span><div class="arch-prob-bars">${rows}</div></div>`;
 }
 
-// Render attention heatmap (positions × positions grid, per-head or average)
+// Render attention heatmap (ECharts heatmap, per-head or average)
+function getAttnHeatmapData(attnMatrix, head) {
+  const n = attnMatrix.length;
+  const data = [];
+  for (let r = 0; r < n; r++) {
+    for (let c = 0; c < n; c++) {
+      if (c > r) {
+        data.push([c, r, '-']); // causal mask
+      } else if (head === 'avg') {
+        let sum = 0;
+        for (let h = 0; h < 4; h++) sum += attnMatrix[r][h][c];
+        data.push([c, r, sum / 4]);
+      } else {
+        data.push([c, r, attnMatrix[r][parseInt(head)][c]]);
+      }
+    }
+  }
+  return data;
+}
+
+function updateAttnHeatmapChart(attnMatrix) {
+  if (!attnHeatmapChart || !attnMatrix || attnMatrix.length === 0) return;
+  const n = attnMatrix.length;
+  const data = getAttnHeatmapData(attnMatrix, currentActiveHead);
+  const positions = Array.from({ length: n }, (_, i) => String(i));
+
+  attnHeatmapChart.setOption({
+    xAxis: { data: positions },
+    yAxis: { data: positions },
+    series: [{ data }],
+  });
+}
+
 function renderAttnHeatmap(attnMatrix, vocab) {
   if (!attnMatrix || attnMatrix.length === 0) return '';
 
   const n = attnMatrix.length;
   const head = currentActiveHead;
-
-  function getWeight(row, col) {
-    if (col > row) return null; // causal mask
-    if (head === 'avg') {
-      let sum = 0;
-      for (let h = 0; h < 4; h++) sum += attnMatrix[row][h][col];
-      return sum / 4;
-    }
-    return attnMatrix[row][parseInt(head)][col];
-  }
-
-  const headColor = head === 'avg' ? '#5B8DEF' : HEAD_COLORS_HEX[parseInt(head)];
-  const rgb = hexToRgb(headColor);
 
   const tabs = `<div class="attn-heatmap-tabs toggle-group" role="group" aria-label="Attention head selector">
     <button data-attn-head="avg" aria-pressed="${head === 'avg'}">Avg</button>
@@ -495,27 +512,72 @@ function renderAttnHeatmap(attnMatrix, vocab) {
     ).join('')}
   </div>`;
 
-  const colHeaders = `<span class="attn-heatmap-corner"></span>` +
-    Array.from({length: n}, (_, c) =>
-      `<span class="attn-heatmap-col-label">${c}</span>`
-    ).join('');
-
-  const rows = Array.from({length: n}, (_, r) => {
-    const label = `<span class="attn-heatmap-row-label">${r}</span>`;
-    const cells = Array.from({length: n}, (_, c) => {
-      const w = getWeight(r, c);
-      if (w === null) return `<span class="attn-heatmap-cell masked"></span>`;
-      const pct = (w * 100).toFixed(1);
-      return `<span class="attn-heatmap-cell" data-row="${r}" data-col="${c}" title="pos ${r}\u2192${c}: ${pct}%" style="background: rgba(${rgb}, ${Math.max(0.06, w)})"></span>`;
-    }).join('');
-    return label + cells;
-  }).join('');
-
   return `<div class="arch-data-section attn-heatmap-container">
     <span class="arch-data-label">Attention weights (${n}\u00d7${n}, causal)</span>
     ${tabs}
-    <div class="attn-heatmap-grid" style="--grid-size: ${n}">${colHeaders}${rows}</div>
+    <div class="attn-heatmap-echart" aria-label="Attention weight heatmap"></div>
   </div>`;
+}
+
+function initAttnHeatmapChart(container, attnMatrix) {
+  const el = container.querySelector('.attn-heatmap-echart');
+  if (!el || !attnMatrix || attnMatrix.length === 0) return;
+
+  const n = attnMatrix.length;
+  const height = Math.max(n * 36 + 60, 200);
+  el.style.height = `${height}px`;
+
+  if (attnHeatmapChart) attnHeatmapChart.dispose();
+  attnHeatmapChart = createChart(el);
+
+  const data = getAttnHeatmapData(attnMatrix, currentActiveHead);
+  const positions = Array.from({ length: n }, (_, i) => String(i));
+
+  attnHeatmapChart.setOption({
+    tooltip: {
+      formatter: (params) => {
+        if (params.value[2] === '-') return null;
+        const pct = (params.value[2] * 100).toFixed(1);
+        return monoTooltip(`Position ${params.value[1]} \u2192 Position ${params.value[0]}`, `${pct}%`);
+      },
+    },
+    xAxis: {
+      type: 'category',
+      data: positions,
+      position: 'top',
+      axisLabel: { color: '#6B7585', fontSize: 10 },
+      axisTick: { show: false },
+      splitArea: { show: false },
+    },
+    yAxis: {
+      type: 'category',
+      data: positions,
+      inverse: true,
+      axisLabel: { color: '#6B7585', fontSize: 10 },
+      axisTick: { show: false },
+      splitArea: { show: false },
+    },
+    visualMap: {
+      show: true,
+      min: 0,
+      max: 1,
+      orient: 'horizontal',
+      left: 'center',
+      bottom: 0,
+      itemWidth: 12,
+      itemHeight: 80,
+      text: ['1.0', '0.0'],
+      textStyle: { color: '#6B7585', fontSize: 9 },
+      inRange: { color: ['#141926', '#152850', '#5B8DEF'] },
+    },
+    series: [{
+      type: 'heatmap',
+      data,
+      emphasis: { itemStyle: { shadowBlur: 6, shadowColor: 'rgba(91, 141, 239, 0.4)' } },
+      itemStyle: { borderWidth: 1, borderColor: '#0B0F1A' },
+    }],
+    grid: { left: 28, right: 8, top: 28, bottom: 48 },
+  });
 }
 
 // Render Q/K/V derivation (collapsible, shows matrix multiplication visually)
@@ -742,6 +804,11 @@ function updateNarrativeData(intermediates, vocab, attnWeights) {
     const dataEl = el.querySelector('.arch-narrative-data');
     if (dataEl) dataEl.innerHTML = renderBlockData(i, intermediates, vocab, attnWeights);
   });
+  // Init attention heatmap ECharts after rendering HTML
+  const attnContainer = container.querySelector('[data-block-index="4"] .arch-narrative-data');
+  if (attnContainer && currentAttnMatrix) {
+    initAttnHeatmapChart(attnContainer, currentAttnMatrix);
+  }
   drawDerivationCanvases();
   drawArchAttnArcs();
 }
@@ -1147,9 +1214,10 @@ function showDataFlow(svg, speed) {
 let cleanupSubs = [];
 
 export function initArchitecture({ vocab }) {
-  // Clean up previous subscriptions on re-init
+  // Clean up previous subscriptions and charts on re-init
   for (const unsub of cleanupSubs) unsub();
   cleanupSubs = [];
+  if (attnHeatmapChart) { attnHeatmapChart.dispose(); attnHeatmapChart = null; }
 
   const container = document.getElementById('arch-svg-container');
   const narrativeContainer = document.getElementById('arch-narrative-container');
@@ -1399,6 +1467,12 @@ export function initArchitecture({ vocab }) {
   // Render all narrative blocks with data
   renderNarrativeBlocks(currentIntermediates, vocab, currentAttnWeights);
 
+  // Init attention heatmap ECharts
+  const attnContainer = narrativeContainer.querySelector('[data-block-index="4"] .arch-narrative-data');
+  if (attnContainer && currentAttnMatrix) {
+    initAttnHeatmapChart(attnContainer, currentAttnMatrix);
+  }
+
   // Populate mini-viz in SVG blocks
   updateMiniViz(svg, currentIntermediates, vocab);
 
@@ -1445,12 +1519,16 @@ export function initArchitecture({ vocab }) {
     const tab = e.target.closest('[data-attn-head]');
     if (tab) {
       currentActiveHead = tab.dataset.attnHead;
-      const attnDataEl = narrativeContainer.querySelector('[data-block-index="4"] .arch-narrative-data');
-      if (attnDataEl) {
-        attnDataEl.innerHTML = renderBlockData(4, currentIntermediates, vocab, currentAttnWeights);
-        drawDerivationCanvases();
-        drawArchAttnArcs();
+      // Update tab pressed states without re-rendering
+      const tabGroup = tab.closest('.attn-heatmap-tabs');
+      if (tabGroup) {
+        tabGroup.querySelectorAll('button').forEach(b => {
+          b.setAttribute('aria-pressed', b.dataset.attnHead === currentActiveHead ? 'true' : 'false');
+        });
       }
+      // Update ECharts heatmap data
+      updateAttnHeatmapChart(currentAttnMatrix);
+      drawArchAttnArcs();
       return;
     }
 
@@ -1471,6 +1549,9 @@ export function initArchitecture({ vocab }) {
       if (titleEl) titleEl.textContent = t(g.dataset.block + '.tooltip');
     });
     renderNarrativeBlocks(currentIntermediates, vocab, currentAttnWeights);
+    // Reinit attention heatmap ECharts after re-render
+    const attnEl = narrativeContainer.querySelector('[data-block-index="4"] .arch-narrative-data');
+    if (attnEl && currentAttnMatrix) initAttnHeatmapChart(attnEl, currentAttnMatrix);
     setupScrollObserver();
     highlightBlock(currentIndex);
   }));

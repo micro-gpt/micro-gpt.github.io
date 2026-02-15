@@ -22,7 +22,7 @@ async function loadData() {
 
 // Lazy section initializers
 const initialized = {};
-const sections = ['intro', 'architecture', 'training', 'generation', 'data'];
+const sections = ['intro', 'data', 'training', 'architecture', 'generation'];
 
 async function initSection(name) {
   if (initialized[name]) return;

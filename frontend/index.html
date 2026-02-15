@@ -238,6 +238,8 @@
     }
 
     /* Train mode controls */
+    .train-status-hidden { display: none; }
+
     .train-mode-controls {
       display: flex;
       align-items: center;
@@ -880,6 +882,10 @@
       border-color: var(--accent);
     }
 
+    .checkpoint-card.checkpoint-inactive {
+      opacity: 0.4;
+    }
+
     .checkpoint-card .step-label {
       font-size: 0.75rem;
       color: var(--text-dim);
@@ -970,6 +976,11 @@
       height: 1.4em;
       background: var(--accent);
       animation: blink 1s step-end infinite;
+    }
+
+    .generated-name .cursor.done {
+      animation: none;
+      opacity: 0.3;
     }
 
     @keyframes blink {
@@ -1119,7 +1130,12 @@
       display: flex;
       align-items: center;
       gap: 0.5rem;
-      height: 20px;
+      min-height: 44px;
+      padding: 10px 0;
+    }
+
+    .prob-bar-row:hover .bar-fill {
+      filter: brightness(1.3);
     }
 
     .prob-bar-row .token-label {
@@ -1132,7 +1148,7 @@
 
     .prob-bar-row .bar-track {
       flex: 1;
-      height: 14px;
+      height: 20px;
       background: rgba(0, 0, 0, 0.2);
       border-radius: 2px;
       overflow: hidden;
@@ -1182,6 +1198,7 @@
     /* Intermediate value blocks (color-coded left border) */
     .inter-block {
       border-left: 3px solid var(--text-dim);
+      margin-bottom: 0.5rem;
     }
 
     /* Collapsible panel */
@@ -1210,6 +1227,24 @@
 
     .collapsible-content.open {
       display: block;
+    }
+
+    /* Skeleton height variants */
+    .skeleton-arch { height: 600px; }
+    .skeleton-chart { height: 300px; }
+    .skeleton-grid { height: 120px; }
+    .skeleton-heatmap { height: 200px; }
+
+    /* Spacing utility classes */
+    .slider-row-spaced { margin-top: 1rem; }
+    .slider-row-flush { margin-bottom: 0; }
+    .btn-spaced-top { margin-top: 1rem; }
+
+    /* Inline style extractions */
+    .inter-empty {
+      color: var(--text-dim);
+      font-size: 0.85rem;
+      padding: 0.5rem;
     }
 
     /* Loading skeleton */
@@ -1827,8 +1862,15 @@
       display: flex;
       align-items: flex-end;
       gap: 1px;
-      height: 24px;
+      height: 48px;
       margin-top: 0.25rem;
+    }
+
+    .temp-preview-label {
+      font-size: 0.7rem;
+      color: var(--text-dim);
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
     }
 
     .temp-preview-bar {
@@ -1939,10 +1981,10 @@
     <nav class="mini-nav" role="navigation" aria-label="Visualization sections">
       <div class="mini-nav-scroll">
         <a class="mini-nav-link active" data-section="intro" href="#section-intro" aria-current="true">Intro</a>
-        <a class="mini-nav-link" data-section="architecture" href="#section-architecture" aria-current="false">Architecture</a>
-        <a class="mini-nav-link" data-section="training" href="#section-training" aria-current="false">Training</a>
-        <a class="mini-nav-link" data-section="generation" href="#section-generation" aria-current="false">Generation</a>
         <a class="mini-nav-link" data-section="data" href="#section-data" aria-current="false">Data</a>
+        <a class="mini-nav-link" data-section="training" href="#section-training" aria-current="false">Training</a>
+        <a class="mini-nav-link" data-section="architecture" href="#section-architecture" aria-current="false">Architecture</a>
+        <a class="mini-nav-link" data-section="generation" href="#section-generation" aria-current="false">Generation</a>
       </div>
       <button class="mini-nav-toggle" id="eli5-toggle"
               aria-pressed="false"
@@ -1970,7 +2012,7 @@
           <span class="stat"><strong>16</strong>-dim</span>
           <span class="stat"><strong>27</strong> vocab</span>
         </div>
-        <button class="btn btn-secondary btn-sm" id="btn-tour" style="margin-top:1rem">Take the tour</button>
+        <button class="btn btn-secondary btn-sm btn-spaced-top" id="btn-tour">Take the tour</button>
       </div>
     </section>
 
@@ -1987,6 +2029,72 @@
         </div>
       </div>
     </div>
+
+    <!-- ===== DATA EXPLORER ===== -->
+    <section class="scroll-section" id="section-data" data-section="data">
+      <div class="card">
+        <h2>Data Explorer</h2>
+        <p class="arch-detail-desc">Explore the 32K training names and the patterns the model learns from</p>
+        <div class="controls-row" id="data-search-row">
+          <div class="control-group">
+            <label for="data-search-input">Search names</label>
+            <input type="text" id="data-search-input" class="token-input data-search-field" placeholder="Search..." aria-label="Filter training names by prefix" autocomplete="off">
+          </div>
+        </div>
+        <div id="data-stats" class="intro-stats data-stats"></div>
+        <div id="data-name-list"></div>
+      </div>
+      <div class="card">
+        <h3>Bigram Frequencies</h3>
+        <div id="data-bigram-chart" class="echart-tall"></div>
+      </div>
+      <div class="card">
+        <h3>Name Length Distribution</h3>
+        <div id="data-length-chart" class="echart-short"></div>
+      </div>
+      <div class="card">
+        <h3>Character Position Frequencies</h3>
+        <div id="data-position-chart" class="echart-tall"></div>
+      </div>
+    </section>
+
+    <!-- ===== TRAINING ===== -->
+    <section class="scroll-section" id="section-training" data-section="training">
+      <div class="card">
+        <h2 data-content-key="heading.trainingProgress">Training Progress</h2>
+        <div class="train-mode-controls" id="train-mode-controls">
+          <div class="toggle-group" role="group" aria-label="Training mode">
+            <button id="btn-pretrained" aria-pressed="true">Pre-trained</button>
+            <button id="btn-train-scratch" aria-pressed="false">Train from Scratch</button>
+          </div>
+          <div id="train-status" class="train-progress train-status-hidden">
+            <span class="spinner"></span>
+            <span class="progress-text" id="train-progress-text">0 / 500</span>
+            <div class="progress-bar-track"><div class="progress-bar-fill" id="train-progress-bar"></div></div>
+          </div>
+        </div>
+        <div class="viz-container" id="training-svg-container">
+          <div class="skeleton skeleton-chart"></div>
+        </div>
+        <div class="slider-row slider-row-spaced" id="step-slider-row">
+          <label for="step-slider">Step</label>
+          <input type="range" id="step-slider" min="0" max="499" value="499" aria-label="Training step">
+          <span class="value" id="step-value">500</span>
+        </div>
+      </div>
+      <div class="card">
+        <h3>Generated Names at Checkpoints</h3>
+        <div class="checkpoint-grid" id="checkpoint-container">
+          <div class="skeleton skeleton-grid"></div>
+        </div>
+      </div>
+      <div class="card">
+        <h3 data-content-key="heading.weightInspector">Weight Evolution</h3>
+        <div id="weight-inspector">
+          <div class="skeleton skeleton-heatmap"></div>
+        </div>
+      </div>
+    </section>
 
     <!-- ===== ARCHITECTURE ===== -->
     <section class="scroll-section" id="section-architecture" data-section="architecture">
@@ -2017,7 +2125,7 @@
         <div class="arch-left">
           <div class="card">
             <div class="viz-container" id="arch-svg-container">
-              <div class="skeleton" style="height:600px"></div>
+              <div class="skeleton skeleton-arch"></div>
             </div>
           </div>
           <div class="arch-legend" aria-label="Color legend">
@@ -2057,44 +2165,6 @@
       </div>
     </section>
 
-    <!-- ===== TRAINING ===== -->
-    <section class="scroll-section" id="section-training" data-section="training">
-      <div class="card">
-        <h2 data-content-key="heading.trainingProgress">Training Progress</h2>
-        <div class="train-mode-controls" id="train-mode-controls">
-          <div class="toggle-group" role="group" aria-label="Training mode">
-            <button id="btn-pretrained" aria-pressed="true">Pre-trained</button>
-            <button id="btn-train-scratch" aria-pressed="false">Train from Scratch</button>
-          </div>
-          <div id="train-status" style="display:none" class="train-progress">
-            <span class="spinner"></span>
-            <span class="progress-text" id="train-progress-text">0 / 500</span>
-            <div class="progress-bar-track"><div class="progress-bar-fill" id="train-progress-bar"></div></div>
-          </div>
-        </div>
-        <div class="viz-container" id="training-svg-container">
-          <div class="skeleton" style="height:300px"></div>
-        </div>
-        <div class="slider-row" id="step-slider-row" style="margin-top:1rem">
-          <label for="step-slider">Step</label>
-          <input type="range" id="step-slider" min="0" max="499" value="499" aria-label="Training step">
-          <span class="value" id="step-value">500</span>
-        </div>
-      </div>
-      <div class="card">
-        <h3>Generated Names at Checkpoints</h3>
-        <div class="checkpoint-grid" id="checkpoint-container">
-          <div class="skeleton" style="height:120px"></div>
-        </div>
-      </div>
-      <div class="card">
-        <h3 data-content-key="heading.weightInspector">Weight Evolution</h3>
-        <div id="weight-inspector">
-          <div class="skeleton" style="height:200px"></div>
-        </div>
-      </div>
-    </section>
-
     <!-- ===== GENERATION ===== -->
     <section class="scroll-section" id="section-generation" data-section="generation">
       <div class="card">
@@ -2102,10 +2172,11 @@
         <div class="controls-row">
           <div class="control-group">
             <label for="temp-slider" data-title-key="tooltip.temperature" title="Controls randomness: lower = more predictable, higher = more creative">Temperature</label>
-            <div class="slider-row" style="margin-bottom:0">
+            <div class="slider-row slider-row-flush">
               <input type="range" id="temp-slider" min="1" max="20" value="5" aria-label="Temperature">
               <span class="value" id="temp-value">0.5</span>
             </div>
+            <span class="temp-preview-label">Distribution preview</span>
             <div class="temp-preview" id="temp-preview" aria-label="Probability distribution preview"></div>
           </div>
           <button class="btn" id="btn-generate">Generate</button>
@@ -2146,34 +2217,6 @@
           <span class="chevron" aria-hidden="true">&#9660;</span>
         </div>
         <div class="collapsible-content" id="infer-inter-content"></div>
-      </div>
-    </section>
-
-    <!-- ===== DATA EXPLORER ===== -->
-    <section class="scroll-section" id="section-data" data-section="data">
-      <div class="card">
-        <h2>Data Explorer</h2>
-        <p class="arch-detail-desc">Explore the 32K training names and the patterns the model learns from</p>
-        <div class="controls-row" id="data-search-row">
-          <div class="control-group">
-            <label for="data-search-input">Search names</label>
-            <input type="text" id="data-search-input" class="token-input data-search-field" placeholder="Search..." aria-label="Filter training names by prefix" autocomplete="off">
-          </div>
-        </div>
-        <div id="data-stats" class="intro-stats data-stats"></div>
-        <div id="data-name-list"></div>
-      </div>
-      <div class="card">
-        <h3>Bigram Frequencies</h3>
-        <div id="data-bigram-chart" class="echart-tall"></div>
-      </div>
-      <div class="card">
-        <h3>Name Length Distribution</h3>
-        <div id="data-length-chart" class="echart-short"></div>
-      </div>
-      <div class="card">
-        <h3>Character Position Frequencies</h3>
-        <div id="data-position-chart" class="echart-tall"></div>
       </div>
     </section>
 
