@@ -4,10 +4,8 @@
  */
 
 import { createChart, FONT_FAMILY, monoTooltip } from './echarts-setup.js';
-import { subscribe } from './state.js';
 
 let chart = null;
-let cleanupSubs = [];
 
 const NODE_COLORS = {
   'Token Embed': '#5B8DEF',
@@ -25,9 +23,23 @@ const NODE_COLORS = {
 };
 
 function l2Norm(vec) {
-  if (!vec) return 1;
+  if (!vec) return 0;
   return Math.sqrt(vec.reduce((s, v) => s + v * v, 0));
 }
+
+const FLOW_PAIRS = [
+  ['Token Embed', 'Combined', 'tokEmb'],
+  ['Pos Embed', 'Combined', 'posEmb'],
+  ['Combined', 'RMSNorm₀', 'combined'],
+  ['RMSNorm₀', 'RMSNorm₁', 'postNorm0'],
+  ['RMSNorm₁', 'Attention', 'postNorm1'],
+  ['Attention', 'Residual₁', 'attnOut'],
+  ['Residual₁', 'RMSNorm₂', 'postResidual1'],
+  ['RMSNorm₂', 'MLP', 'postNorm2'],
+  ['MLP', 'Residual₂', 'mlpOut'],
+  ['Residual₂', 'LM Head', 'postResidual2'],
+  ['LM Head', 'Softmax', 'logits'],
+];
 
 function buildSankeyData(intermediates) {
   const nodes = Object.keys(NODE_COLORS).map(name => ({
@@ -35,37 +47,20 @@ function buildSankeyData(intermediates) {
     itemStyle: { color: NODE_COLORS[name], borderColor: 'rgba(0,0,0,0.3)' },
   }));
 
-  const flowPairs = [
-    ['Token Embed', 'Combined', 'tokEmb'],
-    ['Pos Embed', 'Combined', 'posEmb'],
-    ['Combined', 'RMSNorm₀', 'combined'],
-    ['RMSNorm₀', 'RMSNorm₁', 'postNorm0'],
-    ['RMSNorm₁', 'Attention', 'postNorm1'],
-    ['Attention', 'Residual₁', 'attnOut'],
-    ['Residual₁', 'RMSNorm₂', 'postResidual1'],
-    ['RMSNorm₂', 'MLP', 'postNorm2'],
-    ['MLP', 'Residual₂', 'mlpOut'],
-    ['Residual₂', 'LM Head', 'postResidual2'],
-    ['LM Head', 'Softmax', 'logits'],
-  ];
-
-  const links = flowPairs.map(([source, target, key]) => {
-    const magnitude = intermediates ? l2Norm(intermediates[key]) : 1;
-    return {
-      source,
-      target,
-      value: Math.max(0.5, Math.log2(1 + magnitude)),
-      rawMagnitude: magnitude,
-    };
-  });
+  // Uniform link values — Sankey is a flow diagram, not a magnitude chart.
+  // L2 norms shown in tooltip only.
+  const links = FLOW_PAIRS.map(([source, target, key]) => ({
+    source,
+    target,
+    value: 1,
+    magnitude: intermediates ? l2Norm(intermediates[key]) : 0,
+  }));
 
   return { nodes, links };
 }
 
 export function initFlowChart(el) {
-  for (const unsub of cleanupSubs) unsub();
-  cleanupSubs = [];
-
+  if (chart) chart.dispose();
   chart = createChart(el);
   updateFlowChart(null);
 }
@@ -83,7 +78,7 @@ export function updateFlowChart(intermediates) {
           return `<strong>${params.name}</strong>`;
         }
         return `${params.data.source} \u2192 ${params.data.target}<br/>` +
-               monoTooltip('L2 norm', params.data.rawMagnitude.toFixed(2));
+               monoTooltip('L2 norm', params.data.magnitude.toFixed(2));
       },
     },
     series: [{
@@ -117,8 +112,6 @@ export function updateFlowChart(intermediates) {
 }
 
 export function disposeFlowChart() {
-  for (const unsub of cleanupSubs) unsub();
-  cleanupSubs = [];
   if (chart) {
     chart.dispose();
     chart = null;

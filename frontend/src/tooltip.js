@@ -52,6 +52,7 @@ function hide() {
 export function initTooltips() {
   // Convert existing title attributes to data-tooltip on first encounter
   document.addEventListener('pointerenter', (e) => {
+    if (!(e.target instanceof Element)) return;
     const target = e.target.closest('[title], [data-tooltip]');
     if (!target) return;
 
@@ -67,6 +68,7 @@ export function initTooltips() {
   }, true);
 
   document.addEventListener('pointerleave', (e) => {
+    if (!(e.target instanceof Element)) return;
     const target = e.target.closest('[data-tooltip]');
     if (!target) return;
     clearTimeout(showTimeout);
