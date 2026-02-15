@@ -7,6 +7,8 @@
   <meta name="description" content="Interactive visualization of microGPT — a 199-line, dependency-free GPT implementation">
   <title>microGPT — Interactive Visualization</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧠</text></svg>">
+  <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧠</text></svg>">
+  <link rel="modulepreload" href="/src/main.js">
   <style>
     :root {
       --bg-primary: #0B0F1A;
@@ -1372,42 +1374,6 @@
       z-index: 1;
     }
 
-    /* Attention heatmap */
-    .attn-heatmap-grid {
-      display: grid;
-      grid-template-columns: auto repeat(var(--grid-size), 1fr);
-      gap: 2px;
-      margin-top: 0.5rem;
-    }
-
-    .attn-heatmap-cell {
-      aspect-ratio: 1;
-      border-radius: 2px;
-      min-height: 20px;
-      cursor: crosshair;
-    }
-
-    .attn-heatmap-cell:hover:not(.masked) {
-      outline: 2px solid var(--text-primary);
-      outline-offset: -1px;
-      z-index: 1;
-    }
-
-    .attn-heatmap-cell.masked {
-      cursor: default;
-    }
-
-    .attn-heatmap-row-label,
-    .attn-heatmap-col-label,
-    .attn-heatmap-corner {
-      font-family: var(--font-mono);
-      font-size: 0.7rem;
-      color: var(--text-dim);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-
     .attn-heatmap-tabs {
       margin-bottom: 0.5rem;
     }
@@ -1815,19 +1781,6 @@
       border-color: var(--accent-orange);
     }
 
-    /* Checkpoint markers on loss curve */
-    .checkpoint-marker {
-      cursor: pointer;
-    }
-
-    .checkpoint-marker:hover line {
-      opacity: 0.7 !important;
-    }
-
-    .checkpoint-marker:hover text {
-      fill: var(--text-primary) !important;
-    }
-
     /* Inline token input */
     .token-input {
       width: 3.5rem;
@@ -1904,6 +1857,7 @@
       .attn-head-selector { flex-wrap: wrap; }
       .attn-token-row { overflow-x: auto; flex-wrap: nowrap; -webkit-overflow-scrolling: touch; }
       .attn-token { flex-shrink: 0; }
+      .echart-tall, .echart-medium, .echart-short { min-height: 280px; }
     }
 
     /* ECharts containers */
