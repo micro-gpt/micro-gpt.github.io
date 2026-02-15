@@ -54,7 +54,8 @@ function buildSankeyData(intermediates) {
     return {
       source,
       target,
-      value: Math.max(0.5, magnitude),
+      value: Math.max(0.5, Math.log2(1 + magnitude)),
+      rawMagnitude: magnitude,
     };
   });
 
@@ -82,7 +83,7 @@ export function updateFlowChart(intermediates) {
           return `<strong>${params.name}</strong>`;
         }
         return `${params.data.source} \u2192 ${params.data.target}<br/>` +
-               monoTooltip('L2 norm', params.data.value.toFixed(2));
+               monoTooltip('L2 norm', params.data.rawMagnitude.toFixed(2));
       },
     },
     series: [{
